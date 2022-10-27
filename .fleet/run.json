@@ -12,6 +12,11 @@
         },
         {
             "type": "cargo",
+            "name": "run release",
+            "cargoArgs": [ "run", "--release" ],
+        },
+        {
+            "type": "cargo",
             "name": "clean",
             "cargoArgs": [ "clean" ],
         }
