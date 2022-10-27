@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "type": "cargo",
+            "name": "run dev dynamic (linux only)",
+            "cargoArgs": [ "run", "--features", "bevy/dynamic" ],
+        },
+        {
+            "type": "cargo",
+            "name": "run dev",
+            "cargoArgs": [ "run" ],
+        },
+        {
+            "type": "cargo",
+            "name": "clean",
+            "cargoArgs": [ "clean" ],
+        }
+    ]
+}
