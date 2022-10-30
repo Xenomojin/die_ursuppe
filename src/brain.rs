@@ -1,25 +1,46 @@
+use bevy::prelude::Component;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
 const BIAS_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(19) + x * 0.05;
 const WEIGHT_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(19) + x * 0.05;
-const NEURON_FUNCTION: fn(f32, usize) -> i32 =
-    |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 2.) as i32;
-const CONNECTION_FUNCTION: fn(f32, usize) -> i32 =
-    |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 4.) as i32;
+const NEURON_FUNCTION: fn(f32, usize) -> i8 =
+    |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 2.) as i8;
+const CONNECTION_FUNCTION: fn(f32, usize) -> i8 =
+    |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 4.) as i8;
+/// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
+const IMMUNE_NEURON_COUNT: u8 = 3;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Component)]
 pub struct Brain {
     neurons: Vec<Neuron>,
 }
 
 impl Brain {
+    /// # Funktion `new()`
+    /// Erzeugt ein neues [Brain].
+    /// Erstellt beim Erzeugen `IMMUNE_NEURON_COUNT` anzahl an [Neuron]s.
+    pub fn new() -> Self {
+        let mut neurons = Vec::new();
+        for _ in 0..IMMUNE_NEURON_COUNT {
+            neurons.push(Neuron {
+                inputs: Vec::new(),
+                bias: 0.,
+                output: 0.,
+            });
+        }
+        Self { neurons }
+    }
+
     /// # Funktion Mutate
     /// Erstellt/ Löscht eine Zufällig Anzahl an [Neuron]s, die Abhängig von der Anzahl [Neuron]s im Vergleich zur Norm (35)\
     /// Beim Erstellen eines [Neuron] wird diesem eine eingehende Verbindung ([NeuronInput]) und eine ausgehende Verbindung zugewiesen.
+    /// # Panics
+    /// Panic kann auftreten, falls das [Brain] keine [Neuron]s enthält.
     pub fn mutate(&mut self) {
         let neuron_change = NEURON_FUNCTION(random::<f32>(), self.neurons.len());
         if neuron_change as i8 >= 0 {
+            // Fügt Neuronen hinzu
             for _ in 0..neuron_change {
                 let mut new_neuron = Neuron {
                     inputs: Vec::new(),
@@ -40,9 +61,13 @@ impl Brain {
                 self.neurons.push(new_neuron);
             }
         } else {
+            // Entfernt Neuronen
             for _ in 0..(-neuron_change) {
-                let to_delete_neuron_id =
-                    (random::<f32>() * self.neurons.len() as f32) as usize;
+                let to_delete_neuron_id = (random::<f32>() * self.neurons.len() as f32) as usize;
+                // Überspringe entfernen, wenn immune neuron betroffen ist
+                if to_delete_neuron_id < IMMUNE_NEURON_COUNT as usize {
+                    continue;
+                }
                 for neuron in &mut self.neurons {
                     let mut input_index = 0;
                     while input_index < neuron.inputs.len() {
@@ -63,6 +88,7 @@ impl Brain {
         }
         let connection_change = CONNECTION_FUNCTION(random::<f32>(), self.neurons.len());
         if connection_change >= 0 {
+            // Fügt Connections hinzu
             for _ in 0..connection_change {
                 let new_connection_from_neuron_id =
                     (random::<f32>() * self.neurons.len() as f32) as usize;
@@ -76,6 +102,7 @@ impl Brain {
                     });
             }
         } else {
+            // Entfernt Connections
             for _ in 0..(-connection_change) {
                 let connection_count = self
                     .neurons
@@ -88,11 +115,13 @@ impl Brain {
                     if new_counted_connections > to_delete_connection {
                         let neuron_input_index = to_delete_connection - counted_connections;
                         neuron.inputs.remove(neuron_input_index);
+                        break;
                     }
                     counted_connections = new_counted_connections;
                 }
             }
         }
+        // Verändert weight und bias von Neuronen zufällig
         for neuron in &mut self.neurons {
             neuron.bias += BIAS_FUNCTION(random::<f32>());
             for neuron_input in &mut neuron.inputs {
@@ -145,17 +174,21 @@ impl Brain {
             neuron.output = outputs_temp[neuron_id];
         }
     }
+
+    pub fn neurons(&self) -> &Vec<Neuron> {
+        &self.neurons
+    }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct Neuron {
-    inputs: Vec<NeuronInput>,
-    bias: f32,
-    output: f32,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Neuron {
+    pub inputs: Vec<NeuronInput>,
+    pub bias: f32,
+    pub output: f32,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct NeuronInput {
-    neuron_id: usize,
-    weight: f32,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NeuronInput {
+    pub neuron_id: usize,
+    pub weight: f32,
 }
