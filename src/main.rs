@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
+use sim::{SpawnCell, SpawnFood, Clear};
 
 mod brain;
 mod sim;
@@ -9,11 +10,17 @@ fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
             title: "Die Ursuppe".to_string(),
-            ..bevy::prelude::default()
+            ..default()
         })
+        .add_event::<Clear>()
+        .add_event::<SpawnCell>()
+        .add_event::<SpawnFood>()
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
-        .add_system(ui::ui)
+        .add_system(ui::display_ui)
         .add_system(sim::tick)
+        .add_system(sim::clear)
+        .add_system(sim::spawn_cells)
+        .add_system(sim::spawn_food)
         .run();
 }

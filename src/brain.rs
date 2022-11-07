@@ -8,6 +8,7 @@ const NEURON_FUNCTION: fn(f32, usize) -> i8 =
     |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 2.) as i8;
 const CONNECTION_FUNCTION: fn(f32, usize) -> i8 =
     |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 4.) as i8;
+const ACTIVATION_FUNCTION: fn(f32) -> f32 = |x| x.tanh();
 /// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
 const IMMUNE_NEURON_COUNT: u8 = 3;
 
@@ -167,7 +168,7 @@ impl Brain {
             for neuron_input in &neuron.inputs {
                 new_output += self.neurons[neuron_input.neuron_id].output * neuron_input.weight;
             }
-            new_output = new_output.tanh();
+            new_output = ACTIVATION_FUNCTION(new_output);
             outputs_temp.push(new_output);
         }
         for (neuron_id, neuron) in self.neurons.iter_mut().enumerate() {
@@ -175,6 +176,7 @@ impl Brain {
         }
     }
 
+    /// Getter für Feld `neurons`.
     pub fn neurons(&self) -> &Vec<Neuron> {
         &self.neurons
     }
