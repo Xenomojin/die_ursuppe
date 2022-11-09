@@ -126,8 +126,8 @@ pub fn tick(
         *velocity = new_velocity;
         position.x += velocity.x;
         position.y += velocity.y;
-        velocity.x *= simulation_settings.velocity_damping;
-        velocity.y *= simulation_settings.velocity_damping;
+        velocity.x *= 1. - simulation_settings.velocity_damping;
+        velocity.y *= 1. - simulation_settings.velocity_damping;
         {
             let _calculate_collisions_span = info_span!("calculate_collisions").entered();
             let distance_min_squared = (simulation_settings.cell_radius
