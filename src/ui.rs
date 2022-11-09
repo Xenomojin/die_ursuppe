@@ -7,16 +7,16 @@ use bevy_egui::{
     EguiContext,
 };
 
-use crate::sim::{Cell, Clear, Food, Position, SpawnCell, SpawnFood};
+use crate::sim::{Cell, Clear, Food, Position, SimulationSettings, SpawnCell, SpawnFood};
 
-pub struct UiState {
+pub struct ControlCenterUi {
     cell_energy_drag_value: f32,
     cell_amount_slider_value: u32,
     food_energy_drag_value: f32,
     food_amount_slider_value: u32,
 }
 
-impl Default for UiState {
+impl Default for ControlCenterUi {
     fn default() -> Self {
         Self {
             cell_energy_drag_value: 100.,
@@ -27,14 +27,12 @@ impl Default for UiState {
     }
 }
 
-pub fn display_ui(
+pub fn display_control_center_ui(
     mut egui_context: ResMut<EguiContext>,
-    mut ui_state: Local<UiState>,
+    mut control_center_ui: Local<ControlCenterUi>,
     mut spawn_cell_events: EventWriter<SpawnCell>,
     mut spawn_food_events: EventWriter<SpawnFood>,
     mut clear_events: EventWriter<Clear>,
-    cell_query: Query<&Position, With<Cell>>,
-    food_query: Query<&Position, With<Food>>,
 ) {
     Window::new("Control Center")
         .resizable(true)
@@ -42,16 +40,21 @@ pub fn display_ui(
             ui.heading("Spawn Cells");
             Grid::new("spawn_cells_grid").show(ui, |grid_ui| {
                 grid_ui.label("Energy: ");
-                grid_ui.add(DragValue::new(&mut ui_state.cell_energy_drag_value));
+                grid_ui.add(DragValue::new(
+                    &mut control_center_ui.cell_energy_drag_value,
+                ));
                 grid_ui.end_row();
                 grid_ui.label("Amount: ");
-                grid_ui.add(Slider::new(&mut ui_state.cell_amount_slider_value, 0..=500));
+                grid_ui.add(Slider::new(
+                    &mut control_center_ui.cell_amount_slider_value,
+                    0..=500,
+                ));
                 grid_ui.end_row();
             });
             if ui.button("Spawn Cells").clicked() {
-                for _ in 0..(ui_state.cell_amount_slider_value as usize) {
+                for _ in 0..(control_center_ui.cell_amount_slider_value as usize) {
                     spawn_cell_events.send(SpawnCell {
-                        energy: ui_state.cell_energy_drag_value,
+                        energy: control_center_ui.cell_energy_drag_value,
                     });
                 }
             }
@@ -59,16 +62,21 @@ pub fn display_ui(
             ui.heading("Spawn Food");
             Grid::new("spawn_food_grid").show(ui, |grid_ui| {
                 grid_ui.label("Energy: ");
-                grid_ui.add(DragValue::new(&mut ui_state.food_energy_drag_value));
+                grid_ui.add(DragValue::new(
+                    &mut control_center_ui.food_energy_drag_value,
+                ));
                 grid_ui.end_row();
                 grid_ui.label("Amount: ");
-                grid_ui.add(Slider::new(&mut ui_state.food_amount_slider_value, 0..=500));
+                grid_ui.add(Slider::new(
+                    &mut control_center_ui.food_amount_slider_value,
+                    0..=500,
+                ));
                 grid_ui.end_row();
             });
             if ui.button("Spawn Food").clicked() {
-                for _ in 0..(ui_state.food_amount_slider_value as usize) {
+                for _ in 0..(control_center_ui.food_amount_slider_value as usize) {
                     spawn_food_events.send(SpawnFood {
-                        energy: ui_state.food_energy_drag_value,
+                        energy: control_center_ui.food_energy_drag_value,
                     });
                 }
             }
@@ -78,6 +86,14 @@ pub fn display_ui(
                 clear_events.send(Clear);
             }
         });
+}
+
+pub fn display_simulation_ui(
+    mut egui_context: ResMut<EguiContext>,
+    simulation_settings: ResMut<SimulationSettings>,
+    cell_query: Query<&Position, With<Cell>>,
+    food_query: Query<&Position, With<Food>>,
+) {
     Window::new("Simulation")
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {
@@ -92,7 +108,7 @@ pub fn display_ui(
                     }
                     plot_ui.points(
                         Points::new(PlotPoints::new(cell_points))
-                            .radius(5.)
+                            .radius(simulation_settings.cell_radius)
                             .color(Rgba::RED)
                             .name("cell"),
                     );
@@ -102,7 +118,7 @@ pub fn display_ui(
                     }
                     plot_ui.points(
                         Points::new(PlotPoints::new(food_points))
-                            .radius(3.)
+                            .radius(simulation_settings.food_radius)
                             .color(Rgba::GREEN)
                             .name("food"),
                     );

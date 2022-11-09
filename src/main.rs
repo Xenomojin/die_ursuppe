@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use sim::{SpawnCell, SpawnFood, Clear};
+use sim::{Clear, SimulationSettings, SpawnCell, SpawnFood};
 
 mod brain;
 mod sim;
@@ -12,12 +12,14 @@ fn main() {
             title: "Die Ursuppe".to_string(),
             ..default()
         })
+        .init_resource::<SimulationSettings>()
         .add_event::<Clear>()
         .add_event::<SpawnCell>()
         .add_event::<SpawnFood>()
         .add_plugins(DefaultPlugins)
         .add_plugin(EguiPlugin)
-        .add_system(ui::display_ui)
+        .add_system(ui::display_control_center_ui)
+        .add_system(ui::display_simulation_ui)
         .add_system(sim::tick)
         .add_system(sim::clear)
         .add_system(sim::spawn_cells)
