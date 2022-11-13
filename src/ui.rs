@@ -9,6 +9,7 @@ use bevy_egui::{
 
 use crate::sim::{Cell, Clear, Food, Position, SpawnCell, SpawnFood};
 
+#[derive(Resource)]
 pub struct ControlCenterUi {
     pub rotation_speed_max_drag_value: f32,
     pub acceleration_max_drag_value: f32,
@@ -30,16 +31,16 @@ impl Default for ControlCenterUi {
     fn default() -> Self {
         Self {
             rotation_speed_max_drag_value: 1.,
-            acceleration_max_drag_value: 1.,
+            acceleration_max_drag_value: 2.,
             velocity_damping_slider: 0.5,
-            base_energy_drain_drag_value: 1.,
+            base_energy_drain_drag_value: 0.8,
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
             autospawn_food_checkbox: false,
-            cell_energy_drag_value: 100.,
-            cell_amount_slider: 20,
+            cell_energy_drag_value: 199.,
+            cell_amount_slider: 50,
             food_energy_drag_value: 200.,
-            food_amount_slider: 10,
+            food_amount_slider: 5,
         }
     }
 }
@@ -161,16 +162,6 @@ pub fn display_simulation_ui(
                 .view_aspect(1.)
                 .legend(default())
                 .show(ui, |plot_ui| {
-                    let mut cell_points = Vec::new();
-                    for position in &cell_query {
-                        cell_points.push([position.x as f64, position.y as f64]);
-                    }
-                    plot_ui.points(
-                        Points::new(PlotPoints::new(cell_points))
-                            .radius(control_center_ui.cell_radius_drag_value)
-                            .color(Rgba::RED)
-                            .name("cell"),
-                    );
                     let mut food_points = Vec::new();
                     for position in &food_query {
                         food_points.push([position.x as f64, position.y as f64]);
@@ -180,6 +171,16 @@ pub fn display_simulation_ui(
                             .radius(control_center_ui.food_radius_drag_value)
                             .color(Rgba::GREEN)
                             .name("food"),
+                    );
+                    let mut cell_points = Vec::new();
+                    for position in &cell_query {
+                        cell_points.push([position.x as f64, position.y as f64]);
+                    }
+                    plot_ui.points(
+                            Points::new(PlotPoints::new(cell_points))
+                            .radius(control_center_ui.cell_radius_drag_value)
+                            .color(Rgba::RED)
+                            .name("cell"),
                     );
                 });
         });

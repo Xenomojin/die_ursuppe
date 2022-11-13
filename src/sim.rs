@@ -129,7 +129,7 @@ pub fn tick(
             // kind spawnen
             let mut child_brain = brain.clone();
             child_brain.mutate();
-            commands.spawn_bundle((
+            commands.spawn((
                 Cell,
                 Position {
                     x: position.x,
@@ -185,7 +185,7 @@ pub fn spawn_cells(mut commands: Commands, mut spawn_cell_events: EventReader<Sp
         brain.mutate();
         let angle_from_center = random::<f32>() * 2. * PI;
         let distance_from_center = random::<f32>() * 1000.;
-        commands.spawn_bundle((
+        commands.spawn((
             Cell,
             Position {
                 x: angle_from_center.cos() * distance_from_center,
@@ -208,7 +208,7 @@ pub fn spawn_food(mut commands: Commands, mut spawn_food_events: EventReader<Spa
     for spawn_food_event in spawn_food_events.iter() {
         let angle_from_center = random::<f32>() * 2. * PI;
         let distance_from_center = random::<f32>() * 1000.;
-        commands.spawn_bundle((
+        commands.spawn((
             Food,
             Position {
                 x: angle_from_center.cos() * distance_from_center,
