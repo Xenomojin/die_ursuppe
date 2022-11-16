@@ -7,14 +7,15 @@ use bevy_egui::{
     EguiContext,
 };
 
-use crate::sim::{Cell, Clear, Food, Position, SpawnCell, SpawnFood};
+use crate::sim::{ApplyChunkSettings, Cell, Clear, Food, Position, SpawnCell};
 
 #[derive(Resource)]
 pub struct ControlCenterUi {
     pub rotation_speed_max_drag_value: f32,
     pub acceleration_max_drag_value: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
-    pub velocity_damping_slider: f32,
+    pub velocity_damping_slider_right: f32,
+    pub velocity_damping_slider_left: f32,
     pub base_energy_drain_drag_value: f32,
     pub cell_radius_drag_value: f32,
     pub food_radius_drag_value: f32,
@@ -24,7 +25,8 @@ pub struct ControlCenterUi {
     pub cell_amount_slider: u32,
     /// Energy-Wert für zukünftiges food
     pub food_energy_drag_value: f32,
-    pub food_amount_slider: u32,
+    pub food_spawn_chance_slider_left: f32,
+    pub food_spawn_chance_slider_right: f32,
 }
 
 impl Default for ControlCenterUi {
@@ -32,7 +34,8 @@ impl Default for ControlCenterUi {
         Self {
             rotation_speed_max_drag_value: 1.,
             acceleration_max_drag_value: 2.,
-            velocity_damping_slider: 0.5,
+            velocity_damping_slider_left: 1.,
+            velocity_damping_slider_right: 0.,
             base_energy_drain_drag_value: 0.8,
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
@@ -40,7 +43,8 @@ impl Default for ControlCenterUi {
             cell_energy_drag_value: 199.,
             cell_amount_slider: 50,
             food_energy_drag_value: 200.,
-            food_amount_slider: 5,
+            food_spawn_chance_slider_left: 0.,
+            food_spawn_chance_slider_right: 0.01,
         }
     }
 }
@@ -49,7 +53,7 @@ pub fn display_control_center_ui(
     mut egui_context: ResMut<EguiContext>,
     mut control_center_ui: ResMut<ControlCenterUi>,
     mut spawn_cell_events: EventWriter<SpawnCell>,
-    mut spawn_food_events: EventWriter<SpawnFood>,
+    mut apply_chunk_settings_events: EventWriter<ApplyChunkSettings>,
     mut clear_events: EventWriter<Clear>,
 ) {
     Window::new("Control Center")
@@ -58,30 +62,37 @@ pub fn display_control_center_ui(
             ui.heading("Cell settings");
             Grid::new("cell_settings_grid").show(ui, |grid_ui| {
                 grid_ui.label("Rotation speed max.: ");
-                grid_ui.add(DragValue::new(
-                    &mut control_center_ui.rotation_speed_max_drag_value,
-                ).speed(0.01));
+                grid_ui.add(
+                    DragValue::new(&mut control_center_ui.rotation_speed_max_drag_value)
+                        .speed(0.01),
+                );
                 grid_ui.end_row();
                 grid_ui.label("Acceleration max.: ");
-                grid_ui.add(DragValue::new(
-                    &mut control_center_ui.acceleration_max_drag_value,
-                ).speed(0.01));
+                grid_ui.add(
+                    DragValue::new(&mut control_center_ui.acceleration_max_drag_value).speed(0.01),
+                );
                 grid_ui.end_row();
-                grid_ui.label("Velocity damping: ");
+                grid_ui.label("Velocity damping Left: ");
                 grid_ui.add(Slider::new(
-                    &mut control_center_ui.velocity_damping_slider,
+                    &mut control_center_ui.velocity_damping_slider_left,
                     0.0..=1.0,
                 ));
                 grid_ui.end_row();
+                grid_ui.label("Velocity damping Right: ");
+                grid_ui.add(Slider::new(
+                        &mut control_center_ui.velocity_damping_slider_right,
+                0.0..=1.0,
+                ));
+                grid_ui.end_row();
                 grid_ui.label("Base energy drain: ");
-                grid_ui.add(DragValue::new(
-                    &mut control_center_ui.base_energy_drain_drag_value,
-                ).speed(0.01));
+                grid_ui.add(
+                    DragValue::new(&mut control_center_ui.base_energy_drain_drag_value).speed(0.01),
+                );
+
                 grid_ui.end_row();
                 grid_ui.label("Cell raidus: ");
-                grid_ui.add(DragValue::new(
-                    &mut control_center_ui.cell_radius_drag_value,
-                ).speed(0.01));
+                grid_ui
+                    .add(DragValue::new(&mut control_center_ui.cell_radius_drag_value).speed(0.01));
                 grid_ui.end_row();
             });
             ui.separator();
@@ -111,9 +122,8 @@ pub fn display_control_center_ui(
             ui.heading("Food settings");
             Grid::new("food_settings_grid").show(ui, |grid_ui| {
                 grid_ui.label("Food radius: ");
-                grid_ui.add(DragValue::new(
-                    &mut control_center_ui.food_radius_drag_value,
-                ).speed(0.01));
+                grid_ui
+                    .add(DragValue::new(&mut control_center_ui.food_radius_drag_value).speed(0.01));
                 grid_ui.end_row();
             });
             ui.separator();
@@ -124,22 +134,24 @@ pub fn display_control_center_ui(
                     &mut control_center_ui.food_energy_drag_value,
                 ));
                 grid_ui.end_row();
-                grid_ui.label("Amount: ");
+                grid_ui.label("Chance left: ");
                 grid_ui.add(Slider::new(
-                    &mut control_center_ui.food_amount_slider,
-                    0..=150,
+                    &mut control_center_ui.food_spawn_chance_slider_left,
+                    0.0..=0.25,
                 ));
                 grid_ui.end_row();
-                if grid_ui.button("Spawn Food").clicked() {
-                    for _ in 0..(control_center_ui.food_amount_slider as usize) {
-                        spawn_food_events.send(SpawnFood {
-                            energy: control_center_ui.food_energy_drag_value,
-                        });
-                    }
-                }
-                grid_ui.checkbox(&mut control_center_ui.autospawn_food_checkbox, "Autospawn");
+                grid_ui.label("Chance right: ");
+                grid_ui.add(Slider::new(
+                    &mut control_center_ui.food_spawn_chance_slider_right,
+                    0.0..=0.25,
+                ));
                 grid_ui.end_row();
             });
+            ui.separator();
+            ui.heading("Apply Settings");
+            if ui.button("Apply").clicked() {
+                apply_chunk_settings_events.send(ApplyChunkSettings);
+            }
             ui.separator();
             ui.heading("Destroy");
             if ui.button("Clear").clicked() {
@@ -177,7 +189,7 @@ pub fn display_simulation_ui(
                         cell_points.push([position.x as f64, position.y as f64]);
                     }
                     plot_ui.points(
-                            Points::new(PlotPoints::new(cell_points))
+                        Points::new(PlotPoints::new(cell_points))
                             .radius(control_center_ui.cell_radius_drag_value)
                             .color(Rgba::RED)
                             .name("cell"),

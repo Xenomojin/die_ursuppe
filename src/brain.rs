@@ -12,7 +12,7 @@ const ACTIVATION_FUNCTION: fn(f32) -> f32 = |x| x.tanh();
 /// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
 const IMMUNE_NEURON_COUNT: u8 = 3;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Component)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, Component)]
 pub struct Brain {
     neurons: Vec<Neuron>,
 }
