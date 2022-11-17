@@ -118,7 +118,6 @@ pub fn tick(
     mut commands: Commands,
     mut cell_query: Query<
         (
-            Entity,
             &mut Brain,
             &mut Position,
             &mut Rotation,
@@ -138,10 +137,15 @@ pub fn tick(
     >,
     control_center_ui: Res<ControlCenterUi>,
 ) {
-    for (cell_entity, mut brain, mut position, mut rotation, mut velocity, mut energy, mut age) in
+    for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut age) in
         &mut cell_query
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
+
+        // zelle ist tot und sollte nicht mehr beachtet werden
+        if **energy == 0. {
+            continue;
+        }
 
         // chunk berechnen
         let chunk_idx = (position.x / CHUNK_SIZE) as i32;
@@ -220,7 +224,7 @@ pub fn tick(
             || position.x >= (MAP_SIZE as f32 * CHUNK_SIZE) as f32
             || position.y >= (MAP_SIZE as f32 * CHUNK_SIZE) as f32
         {
-            commands.entity(cell_entity).despawn();
+            **energy = 0.;
             continue;
         }
         velocity.x *= 1. - chunk_settings.velocity_damping;
@@ -315,9 +319,23 @@ pub fn tick(
             foodlist.push(food_entity);
         }
     }
+}
 
+pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy), With<Food>>) {
+    // essen ohne energie löschen
+    for (entity, energy) in &food_query {
+        if **energy <= 0. {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+pub fn despawn_cells(
+    mut commands: Commands,
+    cell_query: Query<(Entity, &Brain, &Energy, &Age), With<Cell>>,
+) {
     // zellen ohne energie löschen
-    for (entity, brain, .., energy, age) in &cell_query {
+    for (entity, brain, energy, age) in &cell_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
             info!(
@@ -325,13 +343,6 @@ pub fn tick(
                 **age,
                 brain.neurons().len()
             );
-        }
-    }
-
-    // essen ohne energie löschen
-    for (entity, _, energy) in &food_query {
-        if **energy <= 0. {
-            commands.entity(entity).despawn();
         }
     }
 }

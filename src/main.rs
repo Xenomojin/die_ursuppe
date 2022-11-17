@@ -26,6 +26,8 @@ fn main() {
         .add_system(ui::display_control_center_ui)
         .add_system(ui::display_simulation_ui)
         .add_system(sim::tick)
+        .add_system(sim::despawn_food)
+        .add_system(sim::despawn_cells)
         .add_system(sim::clear)
         .add_system(sim::spawn_cells)
         .add_system(sim::apply_chunk_settings)
