@@ -156,11 +156,6 @@ pub fn tick_cells(
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
 
-        // zelle ist tot und sollte nicht mehr beachtet werden
-        if **energy == 0. {
-            continue;
-        }
-
         // chunk berechnen
         let chunk_idx = (position.x / CHUNK_SIZE) as i32;
         let chunk_idy = (position.y / CHUNK_SIZE) as i32;
