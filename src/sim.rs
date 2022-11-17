@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
+use bevy::{ecs::schedule::ShouldRun, prelude::*, time::Stopwatch};
 use rand::prelude::*;
 
 use crate::{brain::Brain, ui::ControlCenterUi};
@@ -8,6 +8,23 @@ use crate::{brain::Brain, ui::ControlCenterUi};
 pub const CHUNK_SIZE: f32 = 50.;
 /// Map größe in chunks
 pub const MAP_SIZE: u32 = 40;
+
+#[derive(Resource)]
+pub struct SimulationSettings {
+    pub cell_radius: f32,
+    pub food_radius: f32,
+    pub tick_delta_seconds: f32,
+}
+
+impl Default for SimulationSettings {
+    fn default() -> Self {
+        Self {
+            cell_radius: 5.,
+            food_radius: 3.,
+            tick_delta_seconds: 0.02,
+        }
+    }
+}
 
 #[derive(Default, Debug, Component, Deref, DerefMut)]
 pub struct Foodlist(Vec<Entity>);
@@ -102,8 +119,8 @@ pub fn setup(mut commands: Commands, mut chunk_list: ResMut<ChunkList>) {
             let chunk_entity = commands
                 .spawn(ChunkBundle {
                     position: Position {
-                        x: (idx as f32 * CHUNK_SIZE),
-                        y: (idy as f32 * CHUNK_SIZE),
+                        x: (idx as f32 * CHUNK_SIZE + CHUNK_SIZE / 2.),
+                        y: (idy as f32 * CHUNK_SIZE + CHUNK_SIZE / 2.),
                     },
                     ..default()
                 })
@@ -113,8 +130,7 @@ pub fn setup(mut commands: Commands, mut chunk_list: ResMut<ChunkList>) {
     }
 }
 
-pub fn tick(
-    chunk_list: Res<ChunkList>,
+pub fn tick_cells(
     mut commands: Commands,
     mut cell_query: Query<
         (
@@ -131,11 +147,9 @@ pub fn tick(
         (Entity, &mut Position, &mut Energy),
         (With<Food>, Without<Cell>, Without<Chunk>),
     >,
-    mut chunk_query: Query<
-        (&mut Foodlist, &ChunkSettings, &Position),
-        (With<Chunk>, Without<Cell>, Without<Food>),
-    >,
-    control_center_ui: Res<ControlCenterUi>,
+    chunk_query: Query<(&Foodlist, &ChunkSettings), (With<Chunk>, Without<Cell>, Without<Food>)>,
+    chunk_list: Res<ChunkList>,
+    simulation_settings: Res<SimulationSettings>,
 ) {
     for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut age) in
         &mut cell_query
@@ -172,7 +186,7 @@ pub fn tick(
             }
             let mut nearest_food_distance_squared = f32::INFINITY;
             let mut nearest_food_position = Position::default();
-            for (foodlist, ..) in chunk_query.iter_many(chunk_entities) {
+            for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
                 for (_, food_position, _) in food_query.iter_many(&**foodlist) {
                     let food_relative_position = Position {
                         x: food_position.x - position.x,
@@ -234,10 +248,9 @@ pub fn tick(
             // kollisionen berechnen
             let _calculate_collisions_span = info_span!("calculate_collisions").entered();
             // benötigte distanz berechen (squared um sqrt(x) zu vermeiden)
-            let distance_min_squared = (control_center_ui.cell_radius_drag_value
-                + control_center_ui.food_radius_drag_value)
-                * (control_center_ui.cell_radius_drag_value
-                    + control_center_ui.food_radius_drag_value);
+            let distance_min_squared = (simulation_settings.cell_radius
+                + simulation_settings.food_radius)
+                * (simulation_settings.cell_radius + simulation_settings.food_radius);
             // tatsächliche kollisionen berechnen
             let mut chunk_entities = Vec::with_capacity(9);
             for jdx in -1..1 {
@@ -251,7 +264,7 @@ pub fn tick(
                     }
                 }
             }
-            for (foodlist, ..) in chunk_query.iter_many(chunk_entities) {
+            for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
                 let mut food_query_iter = food_query.iter_many_mut(&**foodlist);
                 while let Some((_, food_position, mut food_energy)) = food_query_iter.fetch_next() {
                     let food_relative_position = Position {
@@ -287,16 +300,20 @@ pub fn tick(
         **energy -= chunk_settings.base_energy_drain;
         **age += 1;
     }
+}
 
-    // essen spawnen
+pub fn spawn_food(
+    mut commands: Commands,
+    mut chunk_query: Query<(&mut Foodlist, &ChunkSettings, &Position), With<Chunk>>,
+) {
     for (mut foodlist, chunk_settings, chunk_position) in &mut chunk_query {
         let mut to_place = chunk_settings.spawn_chance;
         while to_place > 1. {
             let food_entity = commands
                 .spawn(FoodBundle {
                     position: Position {
-                        x: chunk_position.x + random::<f32>() * CHUNK_SIZE,
-                        y: chunk_position.y + random::<f32>() * CHUNK_SIZE,
+                        x: chunk_position.x + (random::<f32>() - 0.5) * CHUNK_SIZE,
+                        y: chunk_position.y + (random::<f32>() - 0.5) * CHUNK_SIZE,
                     },
                     energy: Energy(chunk_settings.spawned_food_energy),
                     ..default()
@@ -309,8 +326,8 @@ pub fn tick(
             let food_entity = commands
                 .spawn(FoodBundle {
                     position: Position {
-                        x: chunk_position.x + random::<f32>() * CHUNK_SIZE,
-                        y: chunk_position.y + random::<f32>() * CHUNK_SIZE,
+                        x: chunk_position.x + (random::<f32>() - 0.5) * CHUNK_SIZE,
+                        y: chunk_position.y + (random::<f32>() - 0.5) * CHUNK_SIZE,
                     },
                     energy: Energy(chunk_settings.spawned_food_energy),
                     ..default()
@@ -344,6 +361,22 @@ pub fn despawn_cells(
                 brain.neurons().len()
             );
         }
+    }
+}
+
+#[derive(Default, Deref, DerefMut)]
+pub struct TickWatch(pub Stopwatch);
+
+pub fn run_on_tick(
+    mut tick_timer: Local<TickWatch>,
+    simulation_settings: Res<SimulationSettings>,
+    time: Res<Time>,
+) -> ShouldRun {
+    if tick_timer.tick(time.delta()).elapsed_secs() > simulation_settings.tick_delta_seconds {
+        tick_timer.reset();
+        ShouldRun::Yes
+    } else {
+        ShouldRun::No
     }
 }
 
@@ -412,5 +445,22 @@ pub fn apply_chunk_settings(
                 base_energy_drain: control_center_ui.base_energy_drain_drag_value,
             };
         }
+    }
+}
+
+pub struct ApplySimulationSettings;
+
+/// Event-Handler für `Clear` Event
+pub fn apply_simulation_settings(
+    mut apply_simulation_settings_events: EventReader<ApplySimulationSettings>,
+    mut simulation_settings: ResMut<SimulationSettings>,
+    control_center_ui: Res<ControlCenterUi>,
+) {
+    for _ in apply_simulation_settings_events.iter() {
+        *simulation_settings = SimulationSettings {
+            cell_radius: control_center_ui.cell_radius_drag_value,
+            food_radius: control_center_ui.food_radius_drag_value,
+            tick_delta_seconds: control_center_ui.tick_delta_seconds_slider,
+        };
     }
 }

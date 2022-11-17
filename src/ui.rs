@@ -7,18 +7,22 @@ use bevy_egui::{
     EguiContext,
 };
 
-use crate::sim::{ApplyChunkSettings, Cell, Clear, Food, Position, SpawnCell};
+use crate::sim::{
+    ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Food, Position, SimulationSettings,
+    SpawnCell,
+};
 
 #[derive(Resource)]
 pub struct ControlCenterUi {
+    pub cell_radius_drag_value: f32,
+    pub food_radius_drag_value: f32,
+    pub tick_delta_seconds_slider: f32,
     pub rotation_speed_max_drag_value: f32,
     pub acceleration_max_drag_value: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
     pub velocity_damping_slider_top: f32,
     pub velocity_damping_slider_bottom: f32,
     pub base_energy_drain_drag_value: f32,
-    pub cell_radius_drag_value: f32,
-    pub food_radius_drag_value: f32,
     pub autospawn_food_checkbox: bool,
     /// Start Energy-Wert für zukünftige manuell gespawnte cells
     pub cell_energy_drag_value: f32,
@@ -32,13 +36,14 @@ pub struct ControlCenterUi {
 impl Default for ControlCenterUi {
     fn default() -> Self {
         Self {
+            cell_radius_drag_value: 5.,
+            food_radius_drag_value: 3.,
+            tick_delta_seconds_slider: 0.02,
             rotation_speed_max_drag_value: 1.,
             acceleration_max_drag_value: 2.,
             velocity_damping_slider_bottom: 0.5,
             velocity_damping_slider_top: 0.5,
             base_energy_drain_drag_value: 0.8,
-            cell_radius_drag_value: 5.,
-            food_radius_drag_value: 3.,
             autospawn_food_checkbox: false,
             cell_energy_drag_value: 199.,
             cell_amount_slider: 50,
@@ -54,6 +59,7 @@ pub fn display_control_center_ui(
     mut control_center_ui: ResMut<ControlCenterUi>,
     mut spawn_cell_events: EventWriter<SpawnCell>,
     mut apply_chunk_settings_events: EventWriter<ApplyChunkSettings>,
+    mut apply_simulation_settings_events: EventWriter<ApplySimulationSettings>,
     mut clear_events: EventWriter<Clear>,
 ) {
     Window::new("Control Center")
@@ -61,6 +67,16 @@ pub fn display_control_center_ui(
         .show(egui_context.ctx_mut(), |ui| {
             ui.heading("Simulation Settings");
             Grid::new("simulation_settings_grid").show(ui, |grid_ui| {
+                grid_ui.label("- Time -");
+                grid_ui.end_row();
+                grid_ui.label("Tick Delta Seconds: ");
+                grid_ui.add(Slider::new(
+                    &mut control_center_ui.tick_delta_seconds_slider,
+                    0.0..=0.2,
+                ));
+                grid_ui.end_row();
+                grid_ui.label("- Miscellaneous -");
+                grid_ui.end_row();
                 grid_ui.label("Cell Radius: ");
                 grid_ui
                     .add(DragValue::new(&mut control_center_ui.cell_radius_drag_value).speed(0.01));
@@ -68,6 +84,10 @@ pub fn display_control_center_ui(
                 grid_ui.label("Food Radius: ");
                 grid_ui
                     .add(DragValue::new(&mut control_center_ui.food_radius_drag_value).speed(0.01));
+                grid_ui.end_row();
+                if grid_ui.button("Apply").clicked() {
+                    apply_simulation_settings_events.send(ApplySimulationSettings);
+                }
                 grid_ui.end_row();
             });
             ui.separator();
@@ -96,8 +116,7 @@ pub fn display_control_center_ui(
             ui.separator();
             ui.heading("Chunk Settings");
             Grid::new("chunk_settings_grid").show(ui, |grid_ui| {
-                grid_ui.label("Cells");
-                grid_ui.separator();
+                grid_ui.label("- Cells -");
                 grid_ui.end_row();
                 grid_ui.label("Rotation Speed Max.: ");
                 grid_ui.add(
@@ -127,8 +146,7 @@ pub fn display_control_center_ui(
                     DragValue::new(&mut control_center_ui.base_energy_drain_drag_value).speed(0.01),
                 );
                 grid_ui.end_row();
-                grid_ui.label("Food");
-                grid_ui.separator();
+                grid_ui.label("- Food -");
                 grid_ui.end_row();
                 grid_ui.label("Energy: ");
                 grid_ui.add(DragValue::new(
@@ -162,7 +180,7 @@ pub fn display_control_center_ui(
 
 pub fn display_simulation_ui(
     mut egui_context: ResMut<EguiContext>,
-    control_center_ui: Res<ControlCenterUi>,
+    simulation_settings: Res<SimulationSettings>,
     cell_query: Query<&Position, With<Cell>>,
     food_query: Query<&Position, With<Food>>,
 ) {
@@ -180,7 +198,7 @@ pub fn display_simulation_ui(
                     }
                     plot_ui.points(
                         Points::new(PlotPoints::new(food_points))
-                            .radius(control_center_ui.food_radius_drag_value)
+                            .radius(simulation_settings.food_radius)
                             .color(Rgba::GREEN)
                             .name("food"),
                     );
@@ -190,7 +208,7 @@ pub fn display_simulation_ui(
                     }
                     plot_ui.points(
                         Points::new(PlotPoints::new(cell_points))
-                            .radius(control_center_ui.cell_radius_drag_value)
+                            .radius(simulation_settings.cell_radius)
                             .color(Rgba::RED)
                             .name("cell"),
                     );

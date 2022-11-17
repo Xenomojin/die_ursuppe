@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use sim::{ApplyChunkSettings, ChunkList, Clear, SpawnCell};
+use sim::{
+    ApplyChunkSettings, ApplySimulationSettings, ChunkList, Clear, SimulationSettings, SpawnCell,
+};
 use ui::ControlCenterUi;
 
 mod brain;
@@ -19,17 +21,25 @@ fn main() {
         .add_plugin(EguiPlugin)
         .add_event::<SpawnCell>()
         .add_event::<Clear>()
+        .add_event::<ApplySimulationSettings>()
         .add_event::<ApplyChunkSettings>()
-        .init_resource::<ControlCenterUi>()
+        .init_resource::<SimulationSettings>()
         .init_resource::<ChunkList>()
+        .init_resource::<ControlCenterUi>()
         .add_startup_system(sim::setup)
         .add_system(ui::display_control_center_ui)
         .add_system(ui::display_simulation_ui)
-        .add_system(sim::tick)
-        .add_system(sim::despawn_food)
-        .add_system(sim::despawn_cells)
-        .add_system(sim::clear)
         .add_system(sim::spawn_cells)
         .add_system(sim::apply_chunk_settings)
+        .add_system(sim::apply_simulation_settings)
+        .add_system(sim::clear)
+        .add_system_set(
+            SystemSet::new()
+                .with_run_criteria(sim::run_on_tick)
+                .with_system(sim::spawn_food)
+                .with_system(sim::tick_cells)
+                .with_system(sim::despawn_food.after(sim::tick_cells))
+                .with_system(sim::despawn_cells.after(sim::tick_cells)),
+        )
         .run();
 }
