@@ -2,12 +2,12 @@ use bevy::prelude::Component;
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 
-const BIAS_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(19) + x * 0.05;
-const WEIGHT_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(19) + x * 0.05;
+const BIAS_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(25) + x * 0.01;
+const WEIGHT_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(25) + x * 0.01;
 const NEURON_FUNCTION: fn(f32, usize) -> i8 =
-    |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 2.) as i8;
+    |x, n| ((x * 2. - 1. - (n as f32 / 10. - 1.)) * 1.03) as i8;
 const CONNECTION_FUNCTION: fn(f32, usize) -> i8 =
-    |x, n| ((x * 2. - 1. - (n as f32 / 35. - 1.)) * 4.) as i8;
+    |x, n| ((x * 2. - 1. - (n as f32 / 10. - 1.)) * 1.2) as i8;
 const ACTIVATION_FUNCTION: fn(f32) -> f32 = |x| x.tanh();
 /// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
 const IMMUNE_NEURON_COUNT: u8 = 3;

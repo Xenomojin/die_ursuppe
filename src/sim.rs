@@ -7,7 +7,7 @@ use crate::{brain::Brain, ui::ControlCenterUi};
 
 pub const CHUNK_SIZE: f32 = 50.;
 /// Map größe in chunks
-pub const MAP_SIZE: u32 = 30;
+pub const MAP_SIZE: u32 = 40;
 
 #[derive(Default, Debug, Component, Deref, DerefMut)]
 pub struct Foodlist(Vec<Entity>);
@@ -27,11 +27,11 @@ impl Default for ChunkSettings {
     fn default() -> Self {
         Self {
             spawn_chance: 0.,
-            spawned_food_energy: 150.,
-            rotation_speed_max: 0.,
-            acceleration_max: 0.,
-            velocity_damping: 0.,
-            base_energy_drain: 0.,
+            spawned_food_energy: 200.,
+            rotation_speed_max: 1.,
+            acceleration_max: 2.,
+            velocity_damping: 0.5,
+            base_energy_drain: 0.8,
         }
     }
 }
@@ -138,7 +138,7 @@ pub fn tick(
     >,
     control_center_ui: Res<ControlCenterUi>,
 ) {
-    for (_, mut brain, mut position, mut rotation, mut velocity, mut energy, mut age) in
+    for (cell_entity, mut brain, mut position, mut rotation, mut velocity, mut energy, mut age) in
         &mut cell_query
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
@@ -154,17 +154,15 @@ pub fn tick(
         {
             let _calculate_brain_inputs_span = info_span!("calculate_brain_inputs").entered();
 
-            let mut chunk_entities = Vec::new();
-            for jdx in -1i32..1i32 {
-                for jdy in -1i32..1i32 {
-                    if chunk_idx + jdx >= 0
-                        && chunk_idx + jdx < MAP_SIZE as i32
-                        && chunk_idy + jdy >= 0
-                        && chunk_idy + jdy < MAP_SIZE as i32
-                    {
-                        chunk_entities.push(
-                            chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
-                        );
+            let mut chunk_entities = Vec::with_capacity(9);
+            for jdx in -1..1 {
+                if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
+                    for jdy in -1..1 {
+                        if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
+                            chunk_entities.push(
+                                chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
+                            );
+                        }
                     }
                 }
             }
@@ -215,13 +213,15 @@ pub fn tick(
         **energy -= (new_kinetic_energy - kinetic_energy).abs();
         // geschwindikeit und position berechen
         *velocity = new_velocity;
-        if position.x + velocity.x > 0.
-            && position.x + velocity.x < (MAP_SIZE as f32 * CHUNK_SIZE) as f32
+        position.x += velocity.x;
+        position.y += velocity.y;
+        if position.x < 0.
+            || position.y < 0.
+            || position.x >= (MAP_SIZE as f32 * CHUNK_SIZE) as f32
+            || position.y >= (MAP_SIZE as f32 * CHUNK_SIZE) as f32
         {
-            position.x += velocity.x;
-        }
-        if position.y + velocity.y > 0. && position.y + velocity.y < MAP_SIZE as f32 * CHUNK_SIZE {
-            position.y += velocity.y;
+            commands.entity(cell_entity).despawn();
+            continue;
         }
         velocity.x *= 1. - chunk_settings.velocity_damping;
         velocity.y *= 1. - chunk_settings.velocity_damping;
@@ -235,17 +235,15 @@ pub fn tick(
                 * (control_center_ui.cell_radius_drag_value
                     + control_center_ui.food_radius_drag_value);
             // tatsächliche kollisionen berechnen
-            let mut chunk_entities = Vec::new();
-            for jdx in -1i32..1i32 {
-                for jdy in -1i32..1i32 {
-                    if chunk_idx + jdx >= 0
-                        && chunk_idx + jdx < MAP_SIZE as i32
-                        && chunk_idy + jdy >= 0
-                        && chunk_idy + jdy < MAP_SIZE as i32
-                    {
-                        chunk_entities.push(
-                            chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
-                        );
+            let mut chunk_entities = Vec::with_capacity(9);
+            for jdx in -1..1 {
+                if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
+                    for jdy in -1..1 {
+                        if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
+                            chunk_entities.push(
+                                chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
+                            );
+                        }
                     }
                 }
             }
@@ -385,8 +383,8 @@ pub fn apply_chunk_settings(
 ) {
     let spawn_chance_left = control_center_ui.food_spawn_chance_slider_left;
     let spawn_chance_right = control_center_ui.food_spawn_chance_slider_right;
-    let velocity_damping_left = control_center_ui.velocity_damping_slider_left;
-    let velocity_damping_right = control_center_ui.velocity_damping_slider_right;
+    let velocity_damping_bottom = control_center_ui.velocity_damping_slider_bottom;
+    let velocity_damping_top = control_center_ui.velocity_damping_slider_top;
     for _ in apply_chunk_settings_events.iter() {
         for (mut chunk_settings, chunk_position) in &mut chunk_query {
             let chunk_idx = (chunk_position.x / CHUNK_SIZE) as f32;
@@ -397,8 +395,8 @@ pub fn apply_chunk_settings(
                 spawned_food_energy: control_center_ui.food_energy_drag_value,
                 rotation_speed_max: control_center_ui.rotation_speed_max_drag_value,
                 acceleration_max: control_center_ui.acceleration_max_drag_value,
-                velocity_damping: velocity_damping_left
-                    + (velocity_damping_right - velocity_damping_left) * chunk_idy
+                velocity_damping: velocity_damping_bottom
+                    + (velocity_damping_top - velocity_damping_bottom) * chunk_idy
                         / MAP_SIZE as f32,
                 base_energy_drain: control_center_ui.base_energy_drain_drag_value,
             };
