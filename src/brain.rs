@@ -133,7 +133,7 @@ impl Brain {
 
     /// # Funktion WriteNeuron
     /// Gibt den [Output] für ein bestimmtes [Neuron] zurück\
-    /// (Falls es existiert, sonst "Null")
+    /// (Falls es existiert, sonst [None])
     pub fn read_neuron(&self, neuron_id: usize) -> Option<f32> {
         if let Some(neuron) = self.neurons.get(neuron_id) {
             Some(neuron.output)

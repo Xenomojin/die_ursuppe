@@ -14,7 +14,7 @@ pub struct SimulationSettings {
     pub cell_radius: f32,
     pub food_radius: f32,
     pub tick_delta_seconds: f32,
-    pub pause: bool,
+    pub paused: bool,
 }
 
 impl Default for SimulationSettings {
@@ -23,7 +23,7 @@ impl Default for SimulationSettings {
             cell_radius: 5.,
             food_radius: 3.,
             tick_delta_seconds: 0.02,
-            pause: true,
+            paused: true,
         }
     }
 }
@@ -74,9 +74,9 @@ pub struct Velocity {
 }
 
 #[derive(Default, Debug, Component)]
-pub struct InterestInThings {
+pub struct CellStats {
     pub age: u32,
-    pub children: u32,
+    pub children_count: u32,
 }
 
 #[derive(Default, Debug, Component, Deref, DerefMut)]
@@ -99,7 +99,7 @@ pub struct CellBundle {
     pub rotation: Rotation,
     pub velocity: Velocity,
     pub energy: Energy,
-    pub interesting_things: InterestInThings,
+    pub stats: CellStats,
 }
 
 #[derive(Default, Bundle)]
@@ -144,7 +144,7 @@ pub fn tick_cells(
             &mut Rotation,
             &mut Velocity,
             &mut Energy,
-            &mut InterestInThings,
+            &mut CellStats,
         ),
         (With<Cell>, Without<Food>, Without<Chunk>),
     >,
@@ -156,7 +156,7 @@ pub fn tick_cells(
     chunk_list: Res<ChunkList>,
     simulation_settings: Res<SimulationSettings>,
 ) {
-    for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut interesting_things) in
+    for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut stats) in
         &mut cell_query
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
@@ -283,7 +283,7 @@ pub fn tick_cells(
         }
         // kind spawnen
         if **energy > 200. {
-            interesting_things.children += 1;
+            stats.children_count += 1;
             let mut child_brain = brain.clone();
             child_brain.mutate();
             commands.spawn(CellBundle {
@@ -299,7 +299,7 @@ pub fn tick_cells(
             **energy /= 2.;
         }
         **energy -= chunk_settings.base_energy_drain;
-        interesting_things.age += 1;
+        stats.age += 1;
     }
 }
 
@@ -350,17 +350,17 @@ pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy),
 
 pub fn despawn_cells(
     mut commands: Commands,
-    cell_query: Query<(Entity, &Brain, &Energy, &InterestInThings), With<Cell>>,
+    cell_query: Query<(Entity, &Brain, &Energy, &CellStats), With<Cell>>,
 ) {
     // zellen ohne energie löschen
-    for (entity, brain, energy, interesting_things) in &cell_query {
+    for (entity, brain, energy, stats) in &cell_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
             info!(
                 "zelle ist im alter von {} ticks mit {} neuronen gestorben, {} Kinder sind jetzt Waisen, ihr bösen Monster",
-                interesting_things.age,
+                stats.age,
                 brain.neurons().len(),
-                interesting_things.children
+                stats.children_count
             );
         }
     }
@@ -375,9 +375,12 @@ pub fn run_on_tick(
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
-    if !simulation_settings.pause
+    if !simulation_settings.paused
         && tick_timer.tick(time.delta()).elapsed_secs() >= simulation_settings.tick_delta_seconds
     {
+        control_center_ui.actual_tick_delta_seconds_label =
+            format!("{:.3}", tick_timer.elapsed_secs());
+        tick_timer.reset();
         ShouldRun::Yes
     } else {
         ShouldRun::No
@@ -454,7 +457,7 @@ pub fn apply_chunk_settings(
 
 pub struct ApplySimulationSettings;
 
-/// Event-Handler für `Clear` Event
+/// Event-Handler für `ApplySimulationSettings` Event
 pub fn apply_simulation_settings(
     mut apply_simulation_settings_events: EventReader<ApplySimulationSettings>,
     mut simulation_settings: ResMut<SimulationSettings>,
@@ -465,7 +468,25 @@ pub fn apply_simulation_settings(
             cell_radius: control_center_ui.cell_radius_drag_value,
             food_radius: control_center_ui.food_radius_drag_value,
             tick_delta_seconds: control_center_ui.tick_delta_seconds_slider,
-            pause: control_center_ui.paused_checkbox,
+            ..*simulation_settings
         };
+    }
+}
+
+pub struct TogglePause;
+
+/// Event-Handler für `TogglePause` Event
+pub fn toggle_pause(
+    mut toggle_pause_events: EventReader<TogglePause>,
+    mut simulation_settings: ResMut<SimulationSettings>,
+    mut control_center_ui: ResMut<ControlCenterUi>,
+) {
+    for _ in toggle_pause_events.iter() {
+        simulation_settings.paused = !simulation_settings.paused;
+        if simulation_settings.paused {
+            control_center_ui.pause_button_text = "Play".to_string();
+        } else {
+            control_center_ui.pause_button_text = "Pause".to_string();
+        }
     }
 }

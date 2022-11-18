@@ -9,12 +9,12 @@ use bevy_egui::{
 
 use crate::sim::{
     ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Food, Position, SimulationSettings,
-    SpawnCell,
+    SpawnCell, TogglePause,
 };
 
 #[derive(Resource)]
 pub struct ControlCenterUi {
-    pub paused_checkbox: bool,
+    pub pause_button_text: String,
     pub cell_radius_drag_value: f32,
     pub food_radius_drag_value: f32,
     pub tick_delta_seconds_slider: f32,
@@ -37,7 +37,7 @@ pub struct ControlCenterUi {
 impl Default for ControlCenterUi {
     fn default() -> Self {
         Self {
-            paused_checkbox: true,
+            pause_button_text: "Play".to_string(),
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
             tick_delta_seconds_slider: 0.02,
@@ -62,6 +62,7 @@ pub fn display_control_center_ui(
     mut spawn_cell_events: EventWriter<SpawnCell>,
     mut apply_chunk_settings_events: EventWriter<ApplyChunkSettings>,
     mut apply_simulation_settings_events: EventWriter<ApplySimulationSettings>,
+    mut toggle_pause_events: EventWriter<TogglePause>,
     mut clear_events: EventWriter<Clear>,
 ) {
     Window::new("Control Center")
@@ -93,17 +94,17 @@ pub fn display_control_center_ui(
                 grid_ui
                     .add(DragValue::new(&mut control_center_ui.food_radius_drag_value).speed(0.01));
                 grid_ui.end_row();
-                if control_center_ui.paused_checkbox {
-                    if grid_ui.button("Resume & Apply").clicked() {
-                        control_center_ui.paused_checkbox = false;
+                grid_ui.horizontal(|cell_ui| {
+                    if cell_ui.button("Apply").clicked() {
                         apply_simulation_settings_events.send(ApplySimulationSettings);
                     }
-                } else {
-                    if grid_ui.button("Pause & Apply").clicked() {
-                        control_center_ui.paused_checkbox = true;
-                        apply_simulation_settings_events.send(ApplySimulationSettings);
+                    if cell_ui
+                        .button(&control_center_ui.pause_button_text)
+                        .clicked()
+                    {
+                        toggle_pause_events.send(TogglePause);
                     }
-                }
+                });
                 grid_ui.end_row();
             });
             ui.separator();
