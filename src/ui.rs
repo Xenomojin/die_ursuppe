@@ -14,6 +14,7 @@ use crate::sim::{
 
 #[derive(Resource)]
 pub struct ControlCenterUi {
+    pub paused_checkbox: bool,
     pub cell_radius_drag_value: f32,
     pub food_radius_drag_value: f32,
     pub tick_delta_seconds_slider: f32,
@@ -24,7 +25,6 @@ pub struct ControlCenterUi {
     pub velocity_damping_slider_top: f32,
     pub velocity_damping_slider_bottom: f32,
     pub base_energy_drain_drag_value: f32,
-    pub autospawn_food_checkbox: bool,
     /// Start Energy-Wert für zukünftige manuell gespawnte cells
     pub cell_energy_drag_value: f32,
     pub cell_amount_slider: u32,
@@ -37,6 +37,7 @@ pub struct ControlCenterUi {
 impl Default for ControlCenterUi {
     fn default() -> Self {
         Self {
+            paused_checkbox: true,
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
             tick_delta_seconds_slider: 0.02,
@@ -46,7 +47,6 @@ impl Default for ControlCenterUi {
             velocity_damping_slider_bottom: 0.5,
             velocity_damping_slider_top: 0.5,
             base_energy_drain_drag_value: 0.8,
-            autospawn_food_checkbox: false,
             cell_energy_drag_value: 199.,
             cell_amount_slider: 50,
             food_energy_drag_value: 200.,
@@ -77,7 +77,7 @@ pub fn display_control_center_ui(
                     0.0..=0.2,
                 ));
                 grid_ui.end_row();
-                grid_ui.label("Actual Delta Seconds: ");
+                grid_ui.label("Actual Tick Delta Seconds: ");
                 grid_ui.colored_label(
                     Rgba::WHITE,
                     &control_center_ui.actual_tick_delta_seconds_label,
@@ -93,8 +93,16 @@ pub fn display_control_center_ui(
                 grid_ui
                     .add(DragValue::new(&mut control_center_ui.food_radius_drag_value).speed(0.01));
                 grid_ui.end_row();
-                if grid_ui.button("Apply").clicked() {
-                    apply_simulation_settings_events.send(ApplySimulationSettings);
+                if control_center_ui.paused_checkbox {
+                    if grid_ui.button("Resume & Apply").clicked() {
+                        control_center_ui.paused_checkbox = false;
+                        apply_simulation_settings_events.send(ApplySimulationSettings);
+                    }
+                } else {
+                    if grid_ui.button("Pause & Apply").clicked() {
+                        control_center_ui.paused_checkbox = true;
+                        apply_simulation_settings_events.send(ApplySimulationSettings);
+                    }
                 }
                 grid_ui.end_row();
             });

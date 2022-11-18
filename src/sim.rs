@@ -14,6 +14,7 @@ pub struct SimulationSettings {
     pub cell_radius: f32,
     pub food_radius: f32,
     pub tick_delta_seconds: f32,
+    pub pause: bool,
 }
 
 impl Default for SimulationSettings {
@@ -22,6 +23,7 @@ impl Default for SimulationSettings {
             cell_radius: 5.,
             food_radius: 3.,
             tick_delta_seconds: 0.02,
+            pause: true,
         }
     }
 }
@@ -71,8 +73,11 @@ pub struct Velocity {
     pub y: f32,
 }
 
-#[derive(Default, Debug, Component, Deref, DerefMut)]
-pub struct Age(pub u32);
+#[derive(Default, Debug, Component)]
+pub struct InterestInThings {
+    pub age: u32,
+    pub children: u32,
+}
 
 #[derive(Default, Debug, Component, Deref, DerefMut)]
 pub struct Energy(pub f32);
@@ -94,7 +99,7 @@ pub struct CellBundle {
     pub rotation: Rotation,
     pub velocity: Velocity,
     pub energy: Energy,
-    pub age: Age,
+    pub interesting_things: InterestInThings,
 }
 
 #[derive(Default, Bundle)]
@@ -139,7 +144,7 @@ pub fn tick_cells(
             &mut Rotation,
             &mut Velocity,
             &mut Energy,
-            &mut Age,
+            &mut InterestInThings,
         ),
         (With<Cell>, Without<Food>, Without<Chunk>),
     >,
@@ -151,7 +156,7 @@ pub fn tick_cells(
     chunk_list: Res<ChunkList>,
     simulation_settings: Res<SimulationSettings>,
 ) {
-    for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut age) in
+    for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut interesting_things) in
         &mut cell_query
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
@@ -278,6 +283,7 @@ pub fn tick_cells(
         }
         // kind spawnen
         if **energy > 200. {
+            interesting_things.children += 1;
             let mut child_brain = brain.clone();
             child_brain.mutate();
             commands.spawn(CellBundle {
@@ -293,7 +299,7 @@ pub fn tick_cells(
             **energy /= 2.;
         }
         **energy -= chunk_settings.base_energy_drain;
-        **age += 1;
+        interesting_things.age += 1;
     }
 }
 
@@ -344,16 +350,17 @@ pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy),
 
 pub fn despawn_cells(
     mut commands: Commands,
-    cell_query: Query<(Entity, &Brain, &Energy, &Age), With<Cell>>,
+    cell_query: Query<(Entity, &Brain, &Energy, &InterestInThings), With<Cell>>,
 ) {
     // zellen ohne energie löschen
-    for (entity, brain, energy, age) in &cell_query {
+    for (entity, brain, energy, interesting_things) in &cell_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
             info!(
-                "zelle ist im alter von {} ticks mit {} neuronen gestorben",
-                **age,
-                brain.neurons().len()
+                "zelle ist im alter von {} ticks mit {} neuronen gestorben, {} Kinder sind jetzt Waisen, ihr bösen Monster",
+                interesting_things.age,
+                brain.neurons().len(),
+                interesting_things.children
             );
         }
     }
@@ -368,10 +375,9 @@ pub fn run_on_tick(
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
-    if tick_timer.tick(time.delta()).elapsed_secs() > simulation_settings.tick_delta_seconds {
-        control_center_ui.actual_tick_delta_seconds_label =
-            format!("{:.3}", tick_timer.elapsed_secs());
-        tick_timer.reset();
+    if !simulation_settings.pause
+        && tick_timer.tick(time.delta()).elapsed_secs() >= simulation_settings.tick_delta_seconds
+    {
         ShouldRun::Yes
     } else {
         ShouldRun::No
@@ -459,6 +465,7 @@ pub fn apply_simulation_settings(
             cell_radius: control_center_ui.cell_radius_drag_value,
             food_radius: control_center_ui.food_radius_drag_value,
             tick_delta_seconds: control_center_ui.tick_delta_seconds_slider,
+            pause: control_center_ui.paused_checkbox,
         };
     }
 }
