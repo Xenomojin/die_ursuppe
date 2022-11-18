@@ -17,6 +17,7 @@ pub struct ControlCenterUi {
     pub cell_radius_drag_value: f32,
     pub food_radius_drag_value: f32,
     pub tick_delta_seconds_slider: f32,
+    pub actual_tick_delta_seconds_label: String,
     pub rotation_speed_max_drag_value: f32,
     pub acceleration_max_drag_value: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
@@ -39,6 +40,7 @@ impl Default for ControlCenterUi {
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
             tick_delta_seconds_slider: 0.02,
+            actual_tick_delta_seconds_label: "-".to_string(),
             rotation_speed_max_drag_value: 1.,
             acceleration_max_drag_value: 2.,
             velocity_damping_slider_bottom: 0.5,
@@ -67,7 +69,7 @@ pub fn display_control_center_ui(
         .show(egui_context.ctx_mut(), |ui| {
             ui.heading("Simulation Settings");
             Grid::new("simulation_settings_grid").show(ui, |grid_ui| {
-                grid_ui.label("- Time -");
+                grid_ui.colored_label(Rgba::GREEN, "- Time -");
                 grid_ui.end_row();
                 grid_ui.label("Tick Delta Seconds: ");
                 grid_ui.add(Slider::new(
@@ -75,7 +77,13 @@ pub fn display_control_center_ui(
                     0.0..=0.2,
                 ));
                 grid_ui.end_row();
-                grid_ui.label("- Miscellaneous -");
+                grid_ui.label("Actual Delta Seconds: ");
+                grid_ui.colored_label(
+                    Rgba::WHITE,
+                    &control_center_ui.actual_tick_delta_seconds_label,
+                );
+                grid_ui.end_row();
+                grid_ui.colored_label(Rgba::GREEN, "- Miscellaneous -");
                 grid_ui.end_row();
                 grid_ui.label("Cell Radius: ");
                 grid_ui
@@ -116,7 +124,7 @@ pub fn display_control_center_ui(
             ui.separator();
             ui.heading("Chunk Settings");
             Grid::new("chunk_settings_grid").show(ui, |grid_ui| {
-                grid_ui.label("- Cells -");
+                grid_ui.colored_label(Rgba::GREEN, "- Cells -");
                 grid_ui.end_row();
                 grid_ui.label("Rotation Speed Max.: ");
                 grid_ui.add(
@@ -146,7 +154,7 @@ pub fn display_control_center_ui(
                     DragValue::new(&mut control_center_ui.base_energy_drain_drag_value).speed(0.01),
                 );
                 grid_ui.end_row();
-                grid_ui.label("- Food -");
+                grid_ui.colored_label(Rgba::GREEN, "- Food -");
                 grid_ui.end_row();
                 grid_ui.label("Energy: ");
                 grid_ui.add(DragValue::new(

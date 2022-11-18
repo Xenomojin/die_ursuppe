@@ -364,10 +364,13 @@ pub struct TickWatch(pub Stopwatch);
 
 pub fn run_on_tick(
     mut tick_timer: Local<TickWatch>,
+    mut control_center_ui: ResMut<ControlCenterUi>,
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
     if tick_timer.tick(time.delta()).elapsed_secs() > simulation_settings.tick_delta_seconds {
+        control_center_ui.actual_tick_delta_seconds_label =
+            format!("{:.3}", tick_timer.elapsed_secs());
         tick_timer.reset();
         ShouldRun::Yes
     } else {
