@@ -3,20 +3,30 @@ use std::f32::consts::PI;
 use bevy::{ecs::schedule::ShouldRun, prelude::*, time::Stopwatch};
 use rand::prelude::*;
 
-use crate::{brain::Brain, ui::ControlCenterUi};
+use crate::{
+    brain::Brain,
+    ui::{CellCountStatisticUi, ChildrenCountStatisticUi, ControlCenterUi, NeuronCountStatisticUi},
+};
 
+/// Größe der Chunks
 pub const CHUNK_SIZE: f32 = 50.;
-/// Map größe in chunks
+/// Map Größe in Chunks
 pub const MAP_SIZE: u32 = 40;
 
+/// Einstellungen für den Verlauf der Simulation
 #[derive(Resource)]
 pub struct SimulationSettings {
+    /// Raduis einer Zelle
     pub cell_radius: f32,
+    /// Raduis eines Foods
     pub food_radius: f32,
+    /// Die estrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
+    /// Ob die Simulation pausiert ist
     pub paused: bool,
 }
 
+// Setzt die Standartwerte für SimulationSettings
 impl Default for SimulationSettings {
     fn default() -> Self {
         Self {
@@ -33,7 +43,12 @@ pub struct Foodlist(Vec<Entity>);
 
 #[derive(Debug, Component)]
 pub struct ChunkSettings {
+    /// Die Wahrscheinlichkeit, dass in diesem Chunk Essen spawnt.
+    /// Werte über 1 werden akzeptiert (1.5 bedeutet, dass mindestens
+    /// ein Essen gespawned wird und ein 50%-ige Chance besteht,
+    /// dass ein weiteres gespawned wird)
     pub spawn_chance: f32,
+    /// Die Energie mit der das Essen gespawned wird.
     pub spawned_food_energy: f32,
     pub rotation_speed_max: f32,
     pub acceleration_max: f32,
@@ -73,14 +88,14 @@ pub struct Velocity {
     pub y: f32,
 }
 
+#[derive(Default, Debug, Component, Deref, DerefMut)]
+pub struct Energy(pub f32);
+
 #[derive(Default, Debug, Component)]
 pub struct CellStats {
     pub age: u32,
     pub children_count: u32,
 }
-
-#[derive(Default, Debug, Component, Deref, DerefMut)]
-pub struct Energy(pub f32);
 
 #[derive(Default, Debug, Component)]
 pub struct Cell;
@@ -152,14 +167,25 @@ pub fn tick_cells(
         (Entity, &mut Position, &mut Energy),
         (With<Food>, Without<Cell>, Without<Chunk>),
     >,
+    mut cell_count_statistic_ui: ResMut<CellCountStatisticUi>,
+    mut children_count_statistic_ui: ResMut<ChildrenCountStatisticUi>,
+    mut neuron_count_statistic_ui: ResMut<NeuronCountStatisticUi>,
     chunk_query: Query<(&Foodlist, &ChunkSettings), (With<Chunk>, Without<Cell>, Without<Food>)>,
     chunk_list: Res<ChunkList>,
     simulation_settings: Res<SimulationSettings>,
+    tick: Res<Tick>,
 ) {
+    let mut cell_count = 0;
+    let mut children_count_sum = 0;
+    let mut neuron_count_sum = 0;
     for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut stats) in
         &mut cell_query
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
+
+        cell_count += 1;
+        children_count_sum += stats.children_count;
+        neuron_count_sum += brain.neurons().len();
 
         // chunk berechnen
         let chunk_idx = (position.x / CHUNK_SIZE) as i32;
@@ -301,6 +327,17 @@ pub fn tick_cells(
         **energy -= chunk_settings.base_energy_drain;
         stats.age += 1;
     }
+    cell_count_statistic_ui
+        .points
+        .push([**tick as f64, cell_count as f64]);
+    if cell_count > 0 {
+        children_count_statistic_ui
+            .average_points
+            .push([**tick as f64, children_count_sum as f64 / cell_count as f64]);
+        neuron_count_statistic_ui
+            .average_points
+            .push([**tick as f64, neuron_count_sum as f64 / cell_count as f64]);
+    }
 }
 
 pub fn spawn_food(
@@ -350,18 +387,21 @@ pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy),
 
 pub fn despawn_cells(
     mut commands: Commands,
+    mut children_count_statistic_ui: ResMut<ChildrenCountStatisticUi>,
+    mut neuron_count_statistic_ui: ResMut<NeuronCountStatisticUi>,
+    tick: Res<Tick>,
     cell_query: Query<(Entity, &Brain, &Energy, &CellStats), With<Cell>>,
 ) {
     // zellen ohne energie löschen
     for (entity, brain, energy, stats) in &cell_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
-            info!(
-                "zelle ist im alter von {} ticks mit {} neuronen gestorben, {} Kinder sind jetzt Waisen, ihr bösen Monster",
-                stats.age,
-                brain.neurons().len(),
-                stats.children_count
-            );
+            children_count_statistic_ui
+                .points
+                .push([**tick as f64, stats.children_count as f64]);
+            neuron_count_statistic_ui
+                .points
+                .push([**tick as f64, brain.neurons().len() as f64]);
         }
     }
 }
@@ -369,9 +409,13 @@ pub fn despawn_cells(
 #[derive(Default, Deref, DerefMut)]
 pub struct TickWatch(pub Stopwatch);
 
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct Tick(pub u64);
+
 pub fn run_on_tick(
     mut tick_timer: Local<TickWatch>,
     mut control_center_ui: ResMut<ControlCenterUi>,
+    mut tick: ResMut<Tick>,
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
@@ -381,6 +425,7 @@ pub fn run_on_tick(
         control_center_ui.actual_tick_delta_seconds_label =
             format!("{:.3}", tick_timer.elapsed_secs());
         tick_timer.reset();
+        **tick += 1;
         ShouldRun::Yes
     } else {
         ShouldRun::No

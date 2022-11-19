@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use sim::{
     ApplyChunkSettings, ApplySimulationSettings, ChunkList, Clear, SimulationSettings, SpawnCell,
-    TogglePause,
+    Tick, TogglePause,
 };
-use ui::ControlCenterUi;
+use ui::{CellCountStatisticUi, ChildrenCountStatisticUi, ControlCenterUi, NeuronCountStatisticUi};
 
 mod brain;
 mod sim;
@@ -20,22 +20,36 @@ fn main() {
             ..default()
         }))
         .add_plugin(EguiPlugin)
+        // Ui Events
         .add_event::<SpawnCell>()
         .add_event::<Clear>()
         .add_event::<ApplySimulationSettings>()
         .add_event::<TogglePause>()
         .add_event::<ApplyChunkSettings>()
+        // Simulation Ressources
+        .init_resource::<Tick>()
         .init_resource::<SimulationSettings>()
         .init_resource::<ChunkList>()
+        // Ui State Ressources
         .init_resource::<ControlCenterUi>()
+        .init_resource::<ChildrenCountStatisticUi>()
+        .init_resource::<CellCountStatisticUi>()
+        .init_resource::<NeuronCountStatisticUi>()
+        // Setup
         .add_startup_system(sim::setup)
-        .add_system(ui::display_control_center_ui)
+        // Ui zeichnen
         .add_system(ui::display_simulation_ui)
+        .add_system(ui::display_control_center_ui)
+        .add_system(ui::display_children_count_statistic_ui)
+        .add_system(ui::display_cell_count_statistic_ui)
+        .add_system(ui::display_neuron_count_statistic_ui)
+        // Ui Event-Handler
         .add_system(sim::spawn_cells)
         .add_system(sim::apply_chunk_settings)
         .add_system(sim::apply_simulation_settings)
         .add_system(sim::toggle_pause)
         .add_system(sim::clear)
+        // Simulation Systeme, die an Tick beteiligt sind
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(sim::run_on_tick)

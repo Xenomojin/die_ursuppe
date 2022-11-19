@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::{
     egui::{
-        plot::{Plot, PlotPoints, Points},
+        plot::{Line, Plot, PlotPoints, Points},
         DragValue, Grid, Rgba, Slider, Window,
     },
     EguiContext,
@@ -173,13 +173,13 @@ pub fn display_control_center_ui(
                 grid_ui.label("Spawn Chance Left: ");
                 grid_ui.add(Slider::new(
                     &mut control_center_ui.food_spawn_chance_slider_left,
-                    0.0..=0.25,
+                    0.0..=0.1,
                 ));
                 grid_ui.end_row();
                 grid_ui.label("Spawn Chance Right: ");
                 grid_ui.add(Slider::new(
                     &mut control_center_ui.food_spawn_chance_slider_right,
-                    0.0..=0.25,
+                    0.0..=0.1,
                 ));
                 grid_ui.end_row();
                 if grid_ui.button("Apply").clicked() {
@@ -204,7 +204,7 @@ pub fn display_simulation_ui(
     Window::new("Simulation")
         .resizable(true)
         .show(egui_context.ctx_mut(), |ui| {
-            Plot::new("sim")
+            Plot::new("simulation")
                 .data_aspect(1.)
                 .view_aspect(1.)
                 .legend(default())
@@ -230,5 +230,68 @@ pub fn display_simulation_ui(
                             .name("cell"),
                     );
                 });
+        });
+}
+
+#[derive(Resource, Default)]
+pub struct ChildrenCountStatisticUi {
+    pub points: Vec<[f64; 2]>,
+    pub average_points: Vec<[f64; 2]>,
+}
+
+pub fn display_children_count_statistic_ui(
+    mut egui_context: ResMut<EguiContext>,
+    children_count_statistic_ui: Res<ChildrenCountStatisticUi>,
+) {
+    Window::new("Children Count Statistic")
+        .resizable(true)
+        .show(egui_context.ctx_mut(), |ui| {
+            Plot::new("children_count_statistic").show(ui, |plot_ui| {
+                plot_ui.points(Points::new(children_count_statistic_ui.points.clone()).radius(2.));
+                plot_ui.line(
+                    Line::new(children_count_statistic_ui.average_points.clone())
+                        .color(Rgba::GREEN),
+                );
+            });
+        });
+}
+
+#[derive(Resource, Default)]
+pub struct CellCountStatisticUi {
+    pub points: Vec<[f64; 2]>,
+}
+
+pub fn display_cell_count_statistic_ui(
+    mut egui_context: ResMut<EguiContext>,
+    cell_count_statistic_ui: Res<CellCountStatisticUi>,
+) {
+    Window::new("Cell Count Statistic")
+        .resizable(true)
+        .show(egui_context.ctx_mut(), |ui| {
+            Plot::new("cell_count_statistic").show(ui, |plot_ui| {
+                plot_ui.line(Line::new(cell_count_statistic_ui.points.clone()));
+            });
+        });
+}
+
+#[derive(Resource, Default)]
+pub struct NeuronCountStatisticUi {
+    pub points: Vec<[f64; 2]>,
+    pub average_points: Vec<[f64; 2]>,
+}
+
+pub fn display_neuron_count_statistic_ui(
+    mut egui_context: ResMut<EguiContext>,
+    neuron_count_statistic_ui: Res<NeuronCountStatisticUi>,
+) {
+    Window::new("Neuron Count Statistic")
+        .resizable(true)
+        .show(egui_context.ctx_mut(), |ui| {
+            Plot::new("neuron_count_statistic").show(ui, |plot_ui| {
+                plot_ui.points(Points::new(neuron_count_statistic_ui.points.clone()).radius(2.));
+                plot_ui.line(
+                    Line::new(neuron_count_statistic_ui.average_points.clone()).color(Rgba::GREEN),
+                );
+            });
         });
 }
