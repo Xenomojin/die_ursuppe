@@ -32,6 +32,9 @@ pub struct ControlCenterUi {
     pub food_energy_drag_value: f32,
     pub food_spawn_chance_slider_left: f32,
     pub food_spawn_chance_slider_right: f32,
+    pub children_count_statistic_checkbox: bool,
+    pub cell_count_statistic_checkbox: bool,
+    pub neuron_count_statistic_checkbox: bool,
 }
 
 impl Default for ControlCenterUi {
@@ -52,6 +55,9 @@ impl Default for ControlCenterUi {
             food_energy_drag_value: 200.,
             food_spawn_chance_slider_left: 0.,
             food_spawn_chance_slider_right: 0.,
+            children_count_statistic_checkbox: false,
+            cell_count_statistic_checkbox: false,
+            neuron_count_statistic_checkbox: false,
         }
     }
 }
@@ -192,6 +198,12 @@ pub fn display_control_center_ui(
             if ui.button("Clear").clicked() {
                 clear_events.send(Clear);
             }
+            ui.separator();
+            ui.heading("Statistics");
+            ui.checkbox(&mut control_center_ui.children_count_statistic_checkbox, " Children Count Statistic");
+            ui.checkbox(&mut control_center_ui.cell_count_statistic_checkbox, " Cell Count Statistic");
+            ui.checkbox(&mut control_center_ui.neuron_count_statistic_checkbox, " Neuron Count Statistic");
+
         });
 }
 
@@ -241,10 +253,12 @@ pub struct ChildrenCountStatisticUi {
 
 pub fn display_children_count_statistic_ui(
     mut egui_context: ResMut<EguiContext>,
+    mut control_center_ui: ResMut<ControlCenterUi>,
     children_count_statistic_ui: Res<ChildrenCountStatisticUi>,
 ) {
     Window::new("Children Count Statistic")
         .resizable(true)
+        .open(&mut control_center_ui.children_count_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
             Plot::new("children_count_statistic").show(ui, |plot_ui| {
                 plot_ui.points(Points::new(children_count_statistic_ui.points.clone()).radius(2.));
@@ -263,10 +277,12 @@ pub struct CellCountStatisticUi {
 
 pub fn display_cell_count_statistic_ui(
     mut egui_context: ResMut<EguiContext>,
+    mut control_center_ui: ResMut<ControlCenterUi>,
     cell_count_statistic_ui: Res<CellCountStatisticUi>,
 ) {
     Window::new("Cell Count Statistic")
         .resizable(true)
+    .open(&mut control_center_ui.cell_count_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
             Plot::new("cell_count_statistic").show(ui, |plot_ui| {
                 plot_ui.line(Line::new(cell_count_statistic_ui.points.clone()));
@@ -282,10 +298,12 @@ pub struct NeuronCountStatisticUi {
 
 pub fn display_neuron_count_statistic_ui(
     mut egui_context: ResMut<EguiContext>,
+    mut control_center_ui: ResMut<ControlCenterUi>,
     neuron_count_statistic_ui: Res<NeuronCountStatisticUi>,
 ) {
     Window::new("Neuron Count Statistic")
         .resizable(true)
+    .open(&mut control_center_ui.neuron_count_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
             Plot::new("neuron_count_statistic").show(ui, |plot_ui| {
                 plot_ui.points(Points::new(neuron_count_statistic_ui.points.clone()).radius(2.));
