@@ -14,25 +14,28 @@ use crate::sim::{
 
 #[derive(Resource)]
 pub struct ControlCenterUi {
+    pub tick_delta_seconds_slider: f32,
+    pub actual_tick_delta_seconds_label: String,
     pub pause_button_text: String,
     pub cell_radius_drag_value: f32,
     pub food_radius_drag_value: f32,
-    pub tick_delta_seconds_slider: f32,
-    pub actual_tick_delta_seconds_label: String,
-    pub rotation_speed_max_drag_value: f32,
-    pub acceleration_max_drag_value: f32,
-    /// Wert zwischen 0 (kein damping) und 1 (100% damping)
-    pub velocity_damping_slider_top: f32,
-    pub velocity_damping_slider_bottom: f32,
     pub base_energy_drain_drag_value: f32,
+    pub neuron_energy_drain_drag_value: f32,
+    pub connection_energy_drain_drag_value: f32,
     /// Start Energy-Wert für zukünftige manuell gespawnte cells
     pub cell_energy_drag_value: f32,
     pub cell_amount_slider: u32,
+    pub rotation_speed_max_drag_value: f32,
+    pub acceleration_max_drag_value: f32,
     /// Energy-Wert für zukünftiges food
     pub food_energy_drag_value: f32,
     pub food_spawn_chance_slider_left: f32,
     pub food_spawn_chance_slider_right: f32,
-    pub children_count_statistic_checkbox: bool,
+    /// Wert zwischen 0 (kein damping) und 1 (100% damping)
+    pub velocity_damping_slider_top: f32,
+    /// Wert zwischen 0 (kein damping) und 1 (100% damping)
+    pub velocity_damping_slider_bottom: f32,
+    pub child_count_statistic_checkbox: bool,
     pub cell_count_statistic_checkbox: bool,
     pub neuron_count_statistic_checkbox: bool,
 }
@@ -40,22 +43,24 @@ pub struct ControlCenterUi {
 impl Default for ControlCenterUi {
     fn default() -> Self {
         Self {
+            tick_delta_seconds_slider: 0.02,
+            actual_tick_delta_seconds_label: "-".to_string(),
             pause_button_text: "Play".to_string(),
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
-            tick_delta_seconds_slider: 0.02,
-            actual_tick_delta_seconds_label: "-".to_string(),
+            base_energy_drain_drag_value: 0.4,
+            neuron_energy_drain_drag_value: 0.02,
+            connection_energy_drain_drag_value: 0.004,
+            cell_energy_drag_value: 199.,
+            cell_amount_slider: 50,
             rotation_speed_max_drag_value: 1.,
             acceleration_max_drag_value: 2.,
             velocity_damping_slider_bottom: 0.5,
             velocity_damping_slider_top: 0.5,
-            base_energy_drain_drag_value: 0.8,
-            cell_energy_drag_value: 199.,
-            cell_amount_slider: 50,
             food_energy_drag_value: 200.,
             food_spawn_chance_slider_left: 0.,
             food_spawn_chance_slider_right: 0.,
-            children_count_statistic_checkbox: false,
+            child_count_statistic_checkbox: false,
             cell_count_statistic_checkbox: false,
             neuron_count_statistic_checkbox: false,
         }
@@ -90,11 +95,30 @@ pub fn display_control_center_ui(
                     &control_center_ui.actual_tick_delta_seconds_label,
                 );
                 grid_ui.end_row();
-                grid_ui.colored_label(Rgba::GREEN, "- Miscellaneous -");
+                grid_ui.colored_label(Rgba::GREEN, "- Cells -");
+                grid_ui.end_row();
+                grid_ui.label("Base Energy Drain: ");
+                grid_ui.add(
+                    DragValue::new(&mut control_center_ui.base_energy_drain_drag_value).speed(0.01),
+                );
+                grid_ui.end_row();
+                grid_ui.label("Neuron Energy Drain: ");
+                grid_ui.add(
+                    DragValue::new(&mut control_center_ui.neuron_energy_drain_drag_value)
+                        .speed(0.001),
+                );
+                grid_ui.end_row();
+                grid_ui.label("Connection Energy Drain: ");
+                grid_ui.add(
+                    DragValue::new(&mut control_center_ui.connection_energy_drain_drag_value)
+                        .speed(0.0001),
+                );
                 grid_ui.end_row();
                 grid_ui.label("Cell Radius: ");
                 grid_ui
                     .add(DragValue::new(&mut control_center_ui.cell_radius_drag_value).speed(0.01));
+                grid_ui.end_row();
+                grid_ui.colored_label(Rgba::GREEN, "- Miscellaneous -");
                 grid_ui.end_row();
                 grid_ui.label("Food Radius: ");
                 grid_ui
@@ -164,11 +188,6 @@ pub fn display_control_center_ui(
                     0.0..=1.0,
                 ));
                 grid_ui.end_row();
-                grid_ui.label("Base Energy Drain: ");
-                grid_ui.add(
-                    DragValue::new(&mut control_center_ui.base_energy_drain_drag_value).speed(0.01),
-                );
-                grid_ui.end_row();
                 grid_ui.colored_label(Rgba::GREEN, "- Food -");
                 grid_ui.end_row();
                 grid_ui.label("Energy: ");
@@ -200,10 +219,18 @@ pub fn display_control_center_ui(
             }
             ui.separator();
             ui.heading("Statistics");
-            ui.checkbox(&mut control_center_ui.children_count_statistic_checkbox, " Children Count Statistic");
-            ui.checkbox(&mut control_center_ui.cell_count_statistic_checkbox, " Cell Count Statistic");
-            ui.checkbox(&mut control_center_ui.neuron_count_statistic_checkbox, " Neuron Count Statistic");
-
+            ui.checkbox(
+                &mut control_center_ui.child_count_statistic_checkbox,
+                " Child Count Statistic",
+            );
+            ui.checkbox(
+                &mut control_center_ui.cell_count_statistic_checkbox,
+                " Cell Count Statistic",
+            );
+            ui.checkbox(
+                &mut control_center_ui.neuron_count_statistic_checkbox,
+                " Neuron Count Statistic",
+            );
         });
 }
 
@@ -229,7 +256,7 @@ pub fn display_simulation_ui(
                         Points::new(PlotPoints::new(food_points))
                             .radius(simulation_settings.food_radius)
                             .color(Rgba::GREEN)
-                            .name("food"),
+                            .name("Food"),
                     );
                     let mut cell_points = Vec::new();
                     for position in &cell_query {
@@ -239,34 +266,42 @@ pub fn display_simulation_ui(
                         Points::new(PlotPoints::new(cell_points))
                             .radius(simulation_settings.cell_radius)
                             .color(Rgba::RED)
-                            .name("cell"),
+                            .name("Cell"),
                     );
                 });
         });
 }
 
 #[derive(Resource, Default)]
-pub struct ChildrenCountStatisticUi {
+pub struct ChildCountStatisticUi {
     pub points: Vec<[f64; 2]>,
     pub average_points: Vec<[f64; 2]>,
 }
 
-pub fn display_children_count_statistic_ui(
+pub fn display_child_count_statistic_ui(
     mut egui_context: ResMut<EguiContext>,
     mut control_center_ui: ResMut<ControlCenterUi>,
-    children_count_statistic_ui: Res<ChildrenCountStatisticUi>,
+    child_count_statistic_ui: Res<ChildCountStatisticUi>,
 ) {
-    Window::new("Children Count Statistic")
+    Window::new("Child Count Statistic")
         .resizable(true)
-        .open(&mut control_center_ui.children_count_statistic_checkbox)
+        .open(&mut control_center_ui.child_count_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
-            Plot::new("children_count_statistic").show(ui, |plot_ui| {
-                plot_ui.points(Points::new(children_count_statistic_ui.points.clone()).radius(2.));
-                plot_ui.line(
-                    Line::new(children_count_statistic_ui.average_points.clone())
-                        .color(Rgba::GREEN),
-                );
-            });
+            Plot::new("child_count_statistic")
+                .legend(default())
+                .show(ui, |plot_ui| {
+                    plot_ui.points(
+                        Points::new(child_count_statistic_ui.points.clone())
+                            .radius(2.)
+                            .color(Rgba::RED)
+                            .name("Child count on cell death"),
+                    );
+                    plot_ui.line(
+                        Line::new(child_count_statistic_ui.average_points.clone())
+                            .color(Rgba::GREEN)
+                            .name("Avg. child count of living cells"),
+                    );
+                });
         });
 }
 
@@ -282,11 +317,17 @@ pub fn display_cell_count_statistic_ui(
 ) {
     Window::new("Cell Count Statistic")
         .resizable(true)
-    .open(&mut control_center_ui.cell_count_statistic_checkbox)
+        .open(&mut control_center_ui.cell_count_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
-            Plot::new("cell_count_statistic").show(ui, |plot_ui| {
-                plot_ui.line(Line::new(cell_count_statistic_ui.points.clone()));
-            });
+            Plot::new("cell_count_statistic")
+                .legend(default())
+                .show(ui, |plot_ui| {
+                    plot_ui.line(
+                        Line::new(cell_count_statistic_ui.points.clone())
+                            .color(Rgba::RED)
+                            .name("Cell count"),
+                    );
+                });
         });
 }
 
@@ -303,13 +344,22 @@ pub fn display_neuron_count_statistic_ui(
 ) {
     Window::new("Neuron Count Statistic")
         .resizable(true)
-    .open(&mut control_center_ui.neuron_count_statistic_checkbox)
+        .open(&mut control_center_ui.neuron_count_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
-            Plot::new("neuron_count_statistic").show(ui, |plot_ui| {
-                plot_ui.points(Points::new(neuron_count_statistic_ui.points.clone()).radius(2.));
-                plot_ui.line(
-                    Line::new(neuron_count_statistic_ui.average_points.clone()).color(Rgba::GREEN),
-                );
-            });
+            Plot::new("neuron_count_statistic")
+                .legend(default())
+                .show(ui, |plot_ui| {
+                    plot_ui.points(
+                        Points::new(neuron_count_statistic_ui.points.clone())
+                            .radius(2.)
+                            .color(Rgba::RED)
+                            .name("Neuron count on cell death"),
+                    );
+                    plot_ui.line(
+                        Line::new(neuron_count_statistic_ui.average_points.clone())
+                            .color(Rgba::GREEN)
+                            .name("Avg. neuron count of living cells"),
+                    );
+                });
         });
 }

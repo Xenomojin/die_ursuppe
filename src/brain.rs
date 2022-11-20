@@ -4,10 +4,8 @@ use serde::{Deserialize, Serialize};
 
 const BIAS_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(25) + x * 0.01;
 const WEIGHT_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(25) + x * 0.01;
-const NEURON_FUNCTION: fn(f32, usize) -> i8 =
-    |x, n| ((x * 2. - 1. - (n as f32 / 10. - 1.)) * 1.03) as i8;
-const CONNECTION_FUNCTION: fn(f32, usize) -> i8 =
-    |x, n| ((x * 2. - 1. - (n as f32 / 10. - 1.)) * 1.2) as i8;
+const NEURON_FUNCTION: fn(f32) -> i8 = |x| (2.22 * x - 1.11).powi(15) as i8;
+const CONNECTION_FUNCTION: fn(f32) -> i8 = |x| (2.38 * x - 1.19).powi(7) as i8;
 const ACTIVATION_FUNCTION: fn(f32) -> f32 = |x| x.tanh();
 /// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
 const IMMUNE_NEURON_COUNT: u8 = 3;
@@ -39,7 +37,7 @@ impl Brain {
     /// # Panics
     /// Panic kann auftreten, falls das [Brain] keine [Neuron]s enthält.
     pub fn mutate(&mut self) {
-        let neuron_change = NEURON_FUNCTION(random::<f32>(), self.neurons.len());
+        let neuron_change = NEURON_FUNCTION(random::<f32>());
         if neuron_change as i8 >= 0 {
             // Fügt Neuronen hinzu
             for _ in 0..neuron_change {
@@ -87,7 +85,7 @@ impl Brain {
                 self.neurons.remove(to_delete_neuron_id);
             }
         }
-        let connection_change = CONNECTION_FUNCTION(random::<f32>(), self.neurons.len());
+        let connection_change = CONNECTION_FUNCTION(random::<f32>());
         if connection_change >= 0 {
             // Fügt Connections hinzu
             for _ in 0..connection_change {

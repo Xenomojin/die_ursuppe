@@ -5,7 +5,7 @@ use rand::prelude::*;
 
 use crate::{
     brain::Brain,
-    ui::{CellCountStatisticUi, ChildrenCountStatisticUi, ControlCenterUi, NeuronCountStatisticUi},
+    ui::{CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi, NeuronCountStatisticUi},
 };
 
 /// Größe der Chunks
@@ -20,6 +20,9 @@ pub struct SimulationSettings {
     pub cell_radius: f32,
     /// Raduis eines Foods
     pub food_radius: f32,
+    pub base_energy_drain: f32,
+    pub neuron_energy_drain: f32,
+    pub connection_energy_drain: f32,
     /// Die estrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
     /// Ob die Simulation pausiert ist
@@ -32,6 +35,9 @@ impl Default for SimulationSettings {
         Self {
             cell_radius: 5.,
             food_radius: 3.,
+            base_energy_drain: 0.4,
+            neuron_energy_drain: 0.02,
+            connection_energy_drain: 0.004,
             tick_delta_seconds: 0.02,
             paused: true,
         }
@@ -54,7 +60,6 @@ pub struct ChunkSettings {
     pub acceleration_max: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
     pub velocity_damping: f32,
-    pub base_energy_drain: f32,
 }
 
 impl Default for ChunkSettings {
@@ -65,7 +70,6 @@ impl Default for ChunkSettings {
             rotation_speed_max: 1.,
             acceleration_max: 2.,
             velocity_damping: 0.5,
-            base_energy_drain: 0.8,
         }
     }
 }
@@ -168,7 +172,7 @@ pub fn tick_cells(
         (With<Food>, Without<Cell>, Without<Chunk>),
     >,
     mut cell_count_statistic_ui: ResMut<CellCountStatisticUi>,
-    mut children_count_statistic_ui: ResMut<ChildrenCountStatisticUi>,
+    mut child_count_statistic_ui: ResMut<ChildCountStatisticUi>,
     mut neuron_count_statistic_ui: ResMut<NeuronCountStatisticUi>,
     chunk_query: Query<(&Foodlist, &ChunkSettings), (With<Chunk>, Without<Cell>, Without<Food>)>,
     chunk_list: Res<ChunkList>,
@@ -324,14 +328,20 @@ pub fn tick_cells(
             });
             **energy /= 2.;
         }
-        **energy -= chunk_settings.base_energy_drain;
+        let mut connection_count = 0;
+        for neuron in brain.neurons() {
+            connection_count += neuron.inputs.len();
+        }
+        **energy -= simulation_settings.base_energy_drain
+            + brain.neurons().len() as f32 * simulation_settings.neuron_energy_drain
+            + connection_count as f32 * simulation_settings.connection_energy_drain;
         stats.age += 1;
     }
     cell_count_statistic_ui
         .points
         .push([**tick as f64, cell_count as f64]);
     if cell_count > 0 {
-        children_count_statistic_ui
+        child_count_statistic_ui
             .average_points
             .push([**tick as f64, children_count_sum as f64 / cell_count as f64]);
         neuron_count_statistic_ui
@@ -387,7 +397,7 @@ pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy),
 
 pub fn despawn_cells(
     mut commands: Commands,
-    mut children_count_statistic_ui: ResMut<ChildrenCountStatisticUi>,
+    mut child_count_statistic_ui: ResMut<ChildCountStatisticUi>,
     mut neuron_count_statistic_ui: ResMut<NeuronCountStatisticUi>,
     tick: Res<Tick>,
     cell_query: Query<(Entity, &Brain, &Energy, &CellStats), With<Cell>>,
@@ -396,7 +406,7 @@ pub fn despawn_cells(
     for (entity, brain, energy, stats) in &cell_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
-            children_count_statistic_ui
+            child_count_statistic_ui
                 .points
                 .push([**tick as f64, stats.children_count as f64]);
             neuron_count_statistic_ui
@@ -494,7 +504,6 @@ pub fn apply_chunk_settings(
                 velocity_damping: velocity_damping_bottom
                     + (velocity_damping_top - velocity_damping_bottom) * chunk_idy
                         / MAP_SIZE as f32,
-                base_energy_drain: control_center_ui.base_energy_drain_drag_value,
             };
         }
     }
@@ -513,6 +522,9 @@ pub fn apply_simulation_settings(
             cell_radius: control_center_ui.cell_radius_drag_value,
             food_radius: control_center_ui.food_radius_drag_value,
             tick_delta_seconds: control_center_ui.tick_delta_seconds_slider,
+            base_energy_drain: control_center_ui.base_energy_drain_drag_value,
+            neuron_energy_drain: control_center_ui.neuron_energy_drain_drag_value,
+            connection_energy_drain: control_center_ui.connection_energy_drain_drag_value,
             ..*simulation_settings
         };
     }
