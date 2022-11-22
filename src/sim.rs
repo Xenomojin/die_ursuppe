@@ -69,7 +69,7 @@ impl Default for ChunkSettings {
             spawned_food_energy: 200.,
             rotation_speed_max: 1.,
             acceleration_max: 2.,
-            velocity_damping: 0.5,
+            velocity_damping: 0.4,
         }
     }
 }
@@ -187,6 +187,7 @@ pub fn tick_cells(
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
 
+        // statistic informationen sammeln
         cell_count += 1;
         children_count_sum += stats.children_count;
         neuron_count_sum += brain.neurons().len();
@@ -231,7 +232,8 @@ pub fn tick_cells(
                 }
             }
             let nearest_food_angle = nearest_food_position.y.atan2(nearest_food_position.x);
-            brain.write_neuron(0, nearest_food_angle);
+            let nearest_food_relative_angle = nearest_food_angle - **rotation;
+            brain.write_neuron(0, nearest_food_relative_angle);
         }
 
         // brain rechnen lassen
@@ -245,10 +247,8 @@ pub fn tick_cells(
         let rotation_neuron_output = brain.read_neuron(1).unwrap();
         let acceleration_neuron_output = brain.read_neuron(2).unwrap();
 
-        // simulationsschritte ausführen
         // rotieren und geschwindigkeit passend verändern
-
-        **rotation += rotation_neuron_output * chunk_settings.rotation_speed_max/*imilian*/;
+        **rotation += rotation_neuron_output * chunk_settings.rotation_speed_max;
         let new_velocity = Velocity {
             x: velocity.x
                 + rotation.cos() * acceleration_neuron_output * chunk_settings.acceleration_max,
