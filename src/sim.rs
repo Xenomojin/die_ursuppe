@@ -316,6 +316,9 @@ pub fn tick_cells(
             stats.children_count += 1;
             let mut child_brain = brain.clone();
             child_brain.mutate();
+            neuron_count_statistic_ui
+                .points
+                .push([**tick as f64, child_brain.neurons().len() as f64]);
             commands.spawn(CellBundle {
                 position: Position {
                     x: position.x,
@@ -398,20 +401,16 @@ pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy),
 pub fn despawn_cells(
     mut commands: Commands,
     mut child_count_statistic_ui: ResMut<ChildCountStatisticUi>,
-    mut neuron_count_statistic_ui: ResMut<NeuronCountStatisticUi>,
     tick: Res<Tick>,
-    cell_query: Query<(Entity, &Brain, &Energy, &CellStats), With<Cell>>,
+    cell_query: Query<(Entity, &Energy, &CellStats), With<Cell>>,
 ) {
     // zellen ohne energie löschen
-    for (entity, brain, energy, stats) in &cell_query {
+    for (entity, energy, stats) in &cell_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
             child_count_statistic_ui
                 .points
                 .push([**tick as f64, stats.children_count as f64]);
-            neuron_count_statistic_ui
-                .points
-                .push([**tick as f64, brain.neurons().len() as f64]);
         }
     }
 }
