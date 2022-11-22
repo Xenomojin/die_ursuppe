@@ -8,8 +8,8 @@ use bevy_egui::{
 };
 
 use crate::sim::{
-    ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Food, Position, SimulationSettings,
-    SpawnCell, TogglePause,
+    ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Energy, Food, Position,
+    SimulationSettings, SpawnCell, TogglePause,
 };
 
 #[derive(Resource)]
@@ -49,7 +49,7 @@ impl Default for ControlCenterUi {
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
             base_energy_drain_drag_value: 0.4,
-            neuron_energy_drain_drag_value: 0.02,
+            neuron_energy_drain_drag_value: 0.01,
             connection_energy_drain_drag_value: 0.004,
             cell_energy_drag_value: 199.,
             cell_amount_slider: 50,
@@ -242,7 +242,7 @@ pub fn display_control_center_ui(
 pub fn display_simulation_ui(
     mut egui_context: ResMut<EguiContext>,
     simulation_settings: Res<SimulationSettings>,
-    cell_query: Query<&Position, With<Cell>>,
+    cell_query: Query<(&Position, &Energy), With<Cell>>,
     food_query: Query<&Position, With<Food>>,
 ) {
     CentralPanel::default().show(egui_context.ctx_mut(), |ui| {
@@ -261,15 +261,35 @@ pub fn display_simulation_ui(
                         .color(Rgba::GREEN)
                         .name("Food"),
                 );
-                let mut cell_points = Vec::new();
-                for position in &cell_query {
-                    cell_points.push([position.x as f64, position.y as f64]);
+                let mut cell_points_dark = Vec::new();
+                let mut cell_points_medium = Vec::new();
+                let mut cell_points_light = Vec::new();
+                for (position, energy) in &cell_query {
+                    if **energy < 50. {
+                        cell_points_dark.push([position.x as f64, position.y as f64]);
+                    } else if **energy < 100. {
+                        cell_points_medium.push([position.x as f64, position.y as f64]);
+                    } else {
+                        cell_points_light.push([position.x as f64, position.y as f64]);
+                    }
                 }
                 plot_ui.points(
-                    Points::new(PlotPoints::new(cell_points))
+                    Points::new(PlotPoints::new(cell_points_dark))
+                        .radius(simulation_settings.cell_radius)
+                        .color(Rgba::from_rgb(0.33, 0., 0.))
+                        .name("Cell below 50 energy"),
+                );
+                plot_ui.points(
+                    Points::new(PlotPoints::new(cell_points_medium))
+                        .radius(simulation_settings.cell_radius)
+                        .color(Rgba::from_rgb(0.66, 0., 0.))
+                        .name("Cell below 100 energy"),
+                );
+                plot_ui.points(
+                    Points::new(PlotPoints::new(cell_points_light))
                         .radius(simulation_settings.cell_radius)
                         .color(Rgba::RED)
-                        .name("Cell"),
+                        .name("Cell above 100 energy"),
                 );
             });
     });

@@ -36,7 +36,7 @@ impl Default for SimulationSettings {
             cell_radius: 5.,
             food_radius: 3.,
             base_energy_drain: 0.4,
-            neuron_energy_drain: 0.02,
+            neuron_energy_drain: 0.01,
             connection_energy_drain: 0.004,
             tick_delta_seconds: 0.02,
             paused: true,
