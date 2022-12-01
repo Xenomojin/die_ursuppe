@@ -141,7 +141,7 @@ impl Brain {
     }
 
     /// # Funktion WriteNeuron
-    /// Setzt den [Output] für ein bestimmtes [Neuron]\
+    /// Setzt den [Output] für ein bestimmtes [Neuron].\
     /// (Falls es existiert)
     pub fn write_neuron(&mut self, neuron_id: usize, value: f32) {
         if let Some(neuron) = self.neurons.get_mut(neuron_id) {
@@ -154,11 +154,10 @@ impl Brain {
     ///
     ///  Für jedes [Neuron]: \
     ///  Erstellt die Summe von den vorherigen `Output`s der Neuronen, auf die die [NeuronInputs] des [Neuron] zeigen,
-    ///  und multipliziert die einzelnen [Output]s mit mit dem `weight` des entsprchenden `input`s\
-    ///  Addiert den `bias` zu dieser Summe\
-    ///  Wendet die Activasion Function ( `tanh()` ) auf die Summe an\
-    ///  [Neuron]
-    ///  Wendet alle berechneten [Output]s auf die [Neuron]s an
+    ///  und multipliziert die einzelnen [Output]s mit mit dem `weight` des entsprchenden `input`s.\
+    ///  Addiert den `bias` zu dieser Summe.\
+    ///  Wendet die [ACTIVATION_FUNCTION] auf die Summe an.\
+    ///  Wendet alle berechneten [Output]s auf die [Neuron]s an.
     pub fn tick(&mut self) {
         let mut outputs_temp = Vec::new();
         for neuron in &self.neurons {

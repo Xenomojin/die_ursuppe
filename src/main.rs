@@ -4,7 +4,7 @@ use sim::{
     ApplyChunkSettings, ApplySimulationSettings, ChunkList, Clear, SimulationSettings, SpawnCell,
     Tick, TogglePause,
 };
-use ui::{CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi, NeuronCountStatisticUi};
+use ui::{BrainSizeStatisticUi, CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi};
 
 mod brain;
 mod sim;
@@ -34,7 +34,7 @@ fn main() {
         .init_resource::<ControlCenterUi>()
         .init_resource::<ChildCountStatisticUi>()
         .init_resource::<CellCountStatisticUi>()
-        .init_resource::<NeuronCountStatisticUi>()
+        .init_resource::<BrainSizeStatisticUi>()
         // Setup
         .add_startup_system(sim::setup)
         // Ui zeichnen
@@ -42,7 +42,7 @@ fn main() {
         .add_system(ui::display_control_center_ui)
         .add_system(ui::display_child_count_statistic_ui)
         .add_system(ui::display_cell_count_statistic_ui)
-        .add_system(ui::display_neuron_count_statistic_ui)
+        .add_system(ui::display_brain_size_statistic_ui)
         // Ui Event-Handler
         .add_system(sim::spawn_cells)
         .add_system(sim::apply_chunk_settings)

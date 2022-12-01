@@ -5,7 +5,7 @@ use rand::prelude::*;
 
 use crate::{
     brain::Brain,
-    ui::{CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi, NeuronCountStatisticUi},
+    ui::{BrainSizeStatisticUi, CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi},
 };
 
 /// Größe der Chunks
@@ -173,7 +173,7 @@ pub fn tick_cells(
     >,
     mut cell_count_statistic_ui: ResMut<CellCountStatisticUi>,
     mut child_count_statistic_ui: ResMut<ChildCountStatisticUi>,
-    mut neuron_count_statistic_ui: ResMut<NeuronCountStatisticUi>,
+    mut brain_size_statistic_ui: ResMut<BrainSizeStatisticUi>,
     chunk_query: Query<(&Foodlist, &ChunkSettings), (With<Chunk>, Without<Cell>, Without<Food>)>,
     chunk_list: Res<ChunkList>,
     simulation_settings: Res<SimulationSettings>,
@@ -182,15 +182,23 @@ pub fn tick_cells(
     let mut cell_count = 0;
     let mut children_count_sum = 0;
     let mut neuron_count_sum = 0;
+    let mut connection_count_sum = 0;
     for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut stats) in
         &mut cell_query
     {
         let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
 
+        let neuron_count = brain.neurons().len();
+        let mut connection_count = 0;
+        for neuron in brain.neurons() {
+            connection_count += neuron.inputs.len();
+        }
+
         // statistic informationen sammeln
         cell_count += 1;
         children_count_sum += stats.children_count;
-        neuron_count_sum += brain.neurons().len();
+        neuron_count_sum += neuron_count;
+        connection_count_sum += connection_count;
 
         // chunk berechnen
         let chunk_idx = (position.x / CHUNK_SIZE) as i32;
@@ -238,8 +246,7 @@ pub fn tick_cells(
 
         // brain rechnen lassen
         {
-            let _tick_brain_span =
-                info_span!("tick_brain", neurons = brain.neurons().len()).entered();
+            let _tick_brain_span = info_span!("tick_brain", neurons = neuron_count).entered();
             brain.tick();
         }
 
@@ -316,9 +323,17 @@ pub fn tick_cells(
             stats.children_count += 1;
             let mut child_brain = brain.clone();
             child_brain.mutate();
-            neuron_count_statistic_ui
-                .points
-                .push([**tick as f64, child_brain.neurons().len() as f64]);
+            let child_brain_neuron_count = child_brain.neurons().len();
+            brain_size_statistic_ui
+                .neuron_count_points
+                .push([**tick as f64, child_brain_neuron_count as f64]);
+            let mut connection_count = 0;
+            for neuron in child_brain.neurons() {
+                connection_count += neuron.inputs.len();
+            }
+            brain_size_statistic_ui
+                .connection_count_points
+                .push([**tick as f64, connection_count as f64]);
             commands.spawn(CellBundle {
                 position: Position {
                     x: position.x,
@@ -331,12 +346,8 @@ pub fn tick_cells(
             });
             **energy /= 2.;
         }
-        let mut connection_count = 0;
-        for neuron in brain.neurons() {
-            connection_count += neuron.inputs.len();
-        }
         **energy -= simulation_settings.base_energy_drain
-            + brain.neurons().len() as f32 * simulation_settings.neuron_energy_drain
+            + neuron_count as f32 * simulation_settings.neuron_energy_drain
             + connection_count as f32 * simulation_settings.connection_energy_drain;
         stats.age += 1;
     }
@@ -345,11 +356,20 @@ pub fn tick_cells(
         .push([**tick as f64, cell_count as f64]);
     if cell_count > 0 {
         child_count_statistic_ui
-            .average_points
+            .avg_points
             .push([**tick as f64, children_count_sum as f64 / cell_count as f64]);
-        neuron_count_statistic_ui
-            .average_points
+        brain_size_statistic_ui
+            .avg_neuron_count_points
             .push([**tick as f64, neuron_count_sum as f64 / cell_count as f64]);
+        brain_size_statistic_ui.avg_connection_count_points.push([
+            **tick as f64,
+            connection_count_sum as f64 / cell_count as f64,
+        ]);
+        brain_size_statistic_ui.avg_ratio_points.push([
+            **tick as f64,
+            (connection_count_sum as f64 / cell_count as f64)
+                / (neuron_count_sum as f64 / cell_count as f64),
+        ]);
     }
 }
 

@@ -37,7 +37,7 @@ pub struct ControlCenterUi {
     pub velocity_damping_slider_bottom: f32,
     pub child_count_statistic_checkbox: bool,
     pub cell_count_statistic_checkbox: bool,
-    pub neuron_count_statistic_checkbox: bool,
+    pub brain_size_statistic_checkbox: bool,
 }
 
 impl Default for ControlCenterUi {
@@ -62,7 +62,7 @@ impl Default for ControlCenterUi {
             food_spawn_chance_slider_right: 0.,
             child_count_statistic_checkbox: false,
             cell_count_statistic_checkbox: false,
-            neuron_count_statistic_checkbox: false,
+            brain_size_statistic_checkbox: false,
         }
     }
 }
@@ -232,8 +232,8 @@ pub fn display_control_center_ui(
                     " Cell Count Statistic",
                 );
                 collapsing_ui.checkbox(
-                    &mut control_center_ui.neuron_count_statistic_checkbox,
-                    " Neuron Count Statistic",
+                    &mut control_center_ui.brain_size_statistic_checkbox,
+                    " Brain Size Statistic",
                 );
             });
         });
@@ -298,7 +298,7 @@ pub fn display_simulation_ui(
 #[derive(Resource, Default)]
 pub struct ChildCountStatisticUi {
     pub points: Vec<[f64; 2]>,
-    pub average_points: Vec<[f64; 2]>,
+    pub avg_points: Vec<[f64; 2]>,
 }
 
 pub fn display_child_count_statistic_ui(
@@ -320,7 +320,7 @@ pub fn display_child_count_statistic_ui(
                             .name("Child count on cell death"),
                     );
                     plot_ui.line(
-                        Line::new(child_count_statistic_ui.average_points.clone())
+                        Line::new(child_count_statistic_ui.avg_points.clone())
                             .color(Rgba::GREEN)
                             .name("Avg. child count of living cells"),
                     );
@@ -355,33 +355,52 @@ pub fn display_cell_count_statistic_ui(
 }
 
 #[derive(Resource, Default)]
-pub struct NeuronCountStatisticUi {
-    pub points: Vec<[f64; 2]>,
-    pub average_points: Vec<[f64; 2]>,
+pub struct BrainSizeStatisticUi {
+    pub neuron_count_points: Vec<[f64; 2]>,
+    pub connection_count_points: Vec<[f64; 2]>,
+    pub avg_neuron_count_points: Vec<[f64; 2]>,
+    pub avg_connection_count_points: Vec<[f64; 2]>,
+    pub avg_ratio_points: Vec<[f64; 2]>,
 }
 
-pub fn display_neuron_count_statistic_ui(
+pub fn display_brain_size_statistic_ui(
     mut egui_context: ResMut<EguiContext>,
     mut control_center_ui: ResMut<ControlCenterUi>,
-    neuron_count_statistic_ui: Res<NeuronCountStatisticUi>,
+    brain_size_statistic_ui: Res<BrainSizeStatisticUi>,
 ) {
-    Window::new("Neuron Count Statistic")
+    Window::new("Brain Size Statistic")
         .resizable(true)
-        .open(&mut control_center_ui.neuron_count_statistic_checkbox)
+        .open(&mut control_center_ui.brain_size_statistic_checkbox)
         .show(egui_context.ctx_mut(), |ui| {
-            Plot::new("neuron_count_statistic")
+            Plot::new("brain_size_statistic")
                 .legend(default())
                 .show(ui, |plot_ui| {
                     plot_ui.points(
-                        Points::new(neuron_count_statistic_ui.points.clone())
+                        Points::new(brain_size_statistic_ui.neuron_count_points.clone())
                             .radius(2.)
                             .color(Rgba::RED)
                             .name("Neuron count on cell birth"),
                     );
+                    plot_ui.points(
+                        Points::new(brain_size_statistic_ui.connection_count_points.clone())
+                            .radius(2.)
+                            .color(Rgba::BLUE)
+                            .name("Connection count on cell birth"),
+                    );
                     plot_ui.line(
-                        Line::new(neuron_count_statistic_ui.average_points.clone())
+                        Line::new(brain_size_statistic_ui.avg_neuron_count_points.clone())
                             .color(Rgba::GREEN)
                             .name("Avg. neuron count of living cells"),
+                    );
+                    plot_ui.line(
+                        Line::new(brain_size_statistic_ui.avg_connection_count_points.clone())
+                            .color(Rgba::GREEN)
+                            .name("Avg. connection count of living cells"),
+                    );
+                    plot_ui.line(
+                        Line::new(brain_size_statistic_ui.avg_ratio_points.clone())
+                            .color(Rgba::WHITE)
+                            .name("Avg. connection count / neuron count of living cells"),
                     );
                 });
         });
