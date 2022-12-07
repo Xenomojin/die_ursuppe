@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use sim::{
-    ApplyChunkSettings, ApplySimulationSettings, ChunkList, Clear, SimulationSettings, SpawnCell,
-    Tick, TogglePause,
+    ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Chunk, ChunkList, ChunkSettings,
+    Clear, Energy, Food, Foodlist, Position, Rotation, Save, SimulationSettings, SpawnCell, Tick,
+    TogglePause, Velocity,
 };
 use ui::{BrainSizeStatisticUi, CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi};
 
@@ -20,17 +21,29 @@ fn main() {
             ..default()
         }))
         .add_plugin(EguiPlugin)
-        // Ui Events
+        // Ui events
         .add_event::<SpawnCell>()
         .add_event::<Clear>()
         .add_event::<ApplySimulationSettings>()
         .add_event::<TogglePause>()
         .add_event::<ApplyChunkSettings>()
-        // Simulation Ressources
+        .add_event::<Save>()
+        // Register components
+        .register_type::<Foodlist>()
+        .register_type::<ChunkSettings>()
+        .register_type::<Position>()
+        .register_type::<Rotation>()
+        .register_type::<Velocity>()
+        .register_type::<Energy>()
+        .register_type::<CellStats>()
+        .register_type::<Cell>()
+        .register_type::<Food>()
+        .register_type::<Chunk>()
+        // Simulation ressources
         .init_resource::<Tick>()
         .init_resource::<SimulationSettings>()
         .init_resource::<ChunkList>()
-        // Ui State Ressources
+        // Ui state ressources
         .init_resource::<ControlCenterUi>()
         .init_resource::<ChildCountStatisticUi>()
         .init_resource::<CellCountStatisticUi>()
@@ -49,6 +62,7 @@ fn main() {
         .add_system(sim::apply_simulation_settings)
         .add_system(sim::toggle_pause)
         .add_system(sim::clear)
+        .add_system(sim::save)
         // Simulation Systeme, die an Tick beteiligt sind
         .add_system_set(
             SystemSet::new()

@@ -8,7 +8,7 @@ use bevy_egui::{
 };
 
 use crate::sim::{
-    ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Energy, Food, Position,
+    ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Energy, Food, Position, Save,
     SimulationSettings, SpawnCell, TogglePause,
 };
 
@@ -75,6 +75,7 @@ pub fn display_control_center_ui(
     mut apply_simulation_settings_events: EventWriter<ApplySimulationSettings>,
     mut toggle_pause_events: EventWriter<TogglePause>,
     mut clear_events: EventWriter<Clear>,
+    mut save_events: EventWriter<Save>,
 ) {
     Window::new("Control Center")
         .resizable(true)
@@ -221,6 +222,17 @@ pub fn display_control_center_ui(
                 if collapsing_ui.button("Clear").clicked() {
                     clear_events.send(Clear);
                 }
+            });
+            ui.collapsing("Save & Load", |collapsing_ui| {
+                Grid::new("save_and_load_grid").show(collapsing_ui, |grid_ui| {
+                    if grid_ui.button("Save").clicked() {
+                        save_events.send(Save);
+                    }
+                    if grid_ui.button("Load").clicked() {
+                        todo!();
+                    }
+                    grid_ui.end_row();
+                });
             });
             ui.collapsing("Statistics", |collapsing_ui| {
                 collapsing_ui.checkbox(
