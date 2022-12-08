@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
+use brain::{Brain, Neuron, NeuronInput};
 use sim::{
     ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Chunk, ChunkList, ChunkSettings,
     Clear, Energy, Food, Foodlist, Position, Rotation, Save, SimulationSettings, SpawnCell, Tick,
@@ -36,6 +37,8 @@ fn main() {
         .register_type::<Velocity>()
         .register_type::<Energy>()
         .register_type::<CellStats>()
+        .register_type::<Brain>()
+        .register_type::<Neuron>().register_type::<NeuronInput>()
         .register_type::<Cell>()
         .register_type::<Food>()
         .register_type::<Chunk>()

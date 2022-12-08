@@ -589,10 +589,7 @@ pub fn save(world: &World, save_events: EventReader<Save>) {
         save_events.clear();
         let type_registry = world.resource::<AppTypeRegistry>();
         let scene = DynamicScene::from_world(world, type_registry);
-        let Ok(serialized_scene) = scene.serialize_ron(type_registry) else {
-            warn!("error serializing scene");
-            return
-        };
+        let serialized_scene = scene.serialize_ron(type_registry).unwrap();
         if fs::write(Path::new("save.scn.ron"), serialized_scene).is_err() {
             warn!("error writing scene to disk");
         }

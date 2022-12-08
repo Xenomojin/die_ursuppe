@@ -1,6 +1,5 @@
-use bevy::prelude::Component;
+use bevy::prelude::*;
 use rand::prelude::*;
-use serde::{Deserialize, Serialize};
 
 const BIAS_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(25) + x * 0.01;
 const WEIGHT_FUNCTION: fn(f32) -> f32 = |x| (x * 2. - 1.).powi(25) + x * 0.01;
@@ -10,7 +9,8 @@ const ACTIVATION_FUNCTION: fn(f32) -> f32 = |x| x.tanh();
 /// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
 const IMMUNE_NEURON_COUNT: u8 = 3;
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, Component)]
+#[derive(Default, Debug, Clone, Component, Reflect)]
+#[reflect(Component)]
 pub struct Brain {
     neurons: Vec<Neuron>,
 }
@@ -179,14 +179,14 @@ impl Brain {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Reflect, FromReflect)]
 pub struct Neuron {
     pub inputs: Vec<NeuronInput>,
     pub bias: f32,
     pub output: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Reflect, FromReflect)]
 pub struct NeuronInput {
     pub neuron_id: usize,
     pub weight: f32,
