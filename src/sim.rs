@@ -1,12 +1,12 @@
-use std::{f32::consts::PI, fs, path::Path};
-
-use bevy::{ecs::schedule::ShouldRun, prelude::*, time::Stopwatch};
-use rand::prelude::*;
-
 use crate::{
     brain::Brain,
-    ui::{BrainSizeStatisticUi, CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi},
+    ui::{
+        BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, StatisticData,
+    },
 };
+use bevy::{ecs::schedule::ShouldRun, prelude::*, time::Stopwatch};
+use rand::prelude::*;
+use std::{f32::consts::PI, fs, path::Path};
 
 /// Größe der Chunks
 pub const CHUNK_SIZE: f32 = 50.;
@@ -23,6 +23,7 @@ pub struct SimulationSettings {
     pub base_energy_drain: f32,
     pub neuron_energy_drain: f32,
     pub connection_energy_drain: f32,
+    pub energy_required_for_split: f32,
     /// Die estrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
     /// Ob die Simulation pausiert ist
@@ -38,6 +39,7 @@ impl Default for SimulationSettings {
             base_energy_drain: 0.4,
             neuron_energy_drain: 0.01,
             connection_energy_drain: 0.004,
+            energy_required_for_split: 20.,
             tick_delta_seconds: 0.02,
             paused: true,
         }
@@ -108,15 +110,15 @@ pub struct CellStats {
     pub children_count: u32,
 }
 
-#[derive(Default, Debug, Component, Reflect)]
+#[derive(Default, Component, Reflect)]
 #[reflect(Component)]
 pub struct Cell;
 
-#[derive(Default, Debug, Component, Reflect)]
+#[derive(Default, Component, Reflect)]
 #[reflect(Component)]
 pub struct Food;
 
-#[derive(Default, Debug, Component, Reflect)]
+#[derive(Default, Component, Reflect)]
 #[reflect(Component)]
 pub struct Chunk;
 
@@ -146,7 +148,7 @@ pub struct ChunkBundle {
     pub chunk_settings: ChunkSettings,
 }
 
-pub fn setup(mut commands: Commands, mut chunk_list: ResMut<ChunkList>) {
+pub fn setup_chunks(mut commands: Commands, mut chunk_list: ResMut<ChunkList>) {
     for idx in 0..MAP_SIZE {
         chunk_list.push(Vec::new());
         for idy in 0..MAP_SIZE {
@@ -181,90 +183,108 @@ pub fn tick_cells(
         (Entity, &mut Position, &mut Energy),
         (With<Food>, Without<Cell>, Without<Chunk>),
     >,
-    mut cell_count_statistic_ui: ResMut<CellCountStatisticUi>,
-    mut child_count_statistic_ui: ResMut<ChildCountStatisticUi>,
-    mut brain_size_statistic_ui: ResMut<BrainSizeStatisticUi>,
+    mut cell_count_statistic_query: Query<
+        &mut StatisticData,
+        (
+            With<CellCountStatistic>,
+            Without<ChildCountStatistic>,
+            Without<BrainSizeStatistic>,
+        ),
+    >,
+    mut child_count_statistic_query: Query<
+        &mut StatisticData,
+        (
+            With<ChildCountStatistic>,
+            Without<CellCountStatistic>,
+            Without<BrainSizeStatistic>,
+        ),
+    >,
+    mut brain_size_statistic_query: Query<
+        &mut StatisticData,
+        (
+            With<BrainSizeStatistic>,
+            Without<CellCountStatistic>,
+            Without<ChildCountStatistic>,
+        ),
+    >,
     chunk_query: Query<(&Foodlist, &ChunkSettings), (With<Chunk>, Without<Cell>, Without<Food>)>,
     chunk_list: Res<ChunkList>,
     simulation_settings: Res<SimulationSettings>,
-    tick: Res<Tick>,
 ) {
+    // Statistik informationen deklarieren
     let mut cell_count = 0;
     let mut children_count_sum = 0;
+    let mut cells_born = 0;
     let mut neuron_count_sum = 0;
     let mut connection_count_sum = 0;
     for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut stats) in
         &mut cell_query
     {
-        let _iterate_on_cell_span = info_span!("iterate_on_cell").entered();
-
         let neuron_count = brain.neurons().len();
         let mut connection_count = 0;
         for neuron in brain.neurons() {
             connection_count += neuron.inputs.len();
         }
 
-        // statistic informationen sammeln
+        // Statistic informationen sammeln
         cell_count += 1;
         children_count_sum += stats.children_count;
         neuron_count_sum += neuron_count;
         connection_count_sum += connection_count;
 
-        // chunk berechnen
+        // Chunk berechnen
         let chunk_idx = (position.x / CHUNK_SIZE) as i32;
         let chunk_idy = (position.y / CHUNK_SIZE) as i32;
         let chunk_settings = chunk_query
             .get_component::<ChunkSettings>(chunk_list[chunk_idx as usize][chunk_idy as usize])
             .unwrap();
 
-        // inputs berechnen und in input neuronen schreiben
-        {
-            let _calculate_brain_inputs_span = info_span!("calculate_brain_inputs").entered();
-
-            let mut chunk_entities = Vec::with_capacity(9);
-            for jdx in -1..1 {
-                if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
-                    for jdy in -1..1 {
-                        if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
-                            chunk_entities.push(
-                                chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
-                            );
-                        }
+        // Inputs berechnen und in input neuronen schreiben
+        let mut chunk_entities = Vec::with_capacity(9);
+        for jdx in -1..1 {
+            if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
+                for jdy in -1..1 {
+                    if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
+                        chunk_entities.push(
+                            chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
+                        );
                     }
                 }
             }
-            let mut nearest_food_distance_squared = f32::INFINITY;
-            let mut nearest_food_position = Position::default();
-            for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
-                for (_, food_position, _) in food_query.iter_many(&**foodlist) {
-                    let food_relative_position = Position {
-                        x: food_position.x - position.x,
-                        y: food_position.y - position.y,
-                    };
-                    let distance_squared = food_relative_position.x * food_relative_position.x
-                        + food_relative_position.y * food_relative_position.y;
-                    if distance_squared < nearest_food_distance_squared {
-                        nearest_food_distance_squared = distance_squared;
-                        nearest_food_position = *food_position;
-                    }
+        }
+        let mut nearest_food_distance_squared = f32::INFINITY;
+        let mut nearest_food_position = Position::default();
+        for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
+            for (_, food_position, _) in food_query.iter_many(&**foodlist) {
+                let food_relative_position = Position {
+                    x: food_position.x - position.x,
+                    y: food_position.y - position.y,
+                };
+                let distance_squared = food_relative_position.x * food_relative_position.x
+                    + food_relative_position.y * food_relative_position.y;
+                if distance_squared < nearest_food_distance_squared {
+                    nearest_food_distance_squared = distance_squared;
+                    nearest_food_position = *food_position;
                 }
             }
-            let nearest_food_angle = nearest_food_position.y.atan2(nearest_food_position.x);
-            let nearest_food_relative_angle = nearest_food_angle - **rotation;
-            brain.write_neuron(0, nearest_food_relative_angle);
         }
+        let nearest_food_angle = nearest_food_position.y.atan2(nearest_food_position.x);
+        let nearest_food_relative_angle = nearest_food_angle - **rotation;
+        brain.write_neuron(0, nearest_food_relative_angle);
+        brain.write_neuron(1, stats.age as f32);
+        brain.write_neuron(2, nearest_food_distance_squared);
+        brain.write_neuron(3, **energy as f32);
+        brain.write_neuron(4, (stats.age as f32 * 0.1).sin());
 
-        // brain rechnen lassen
-        {
-            let _tick_brain_span = info_span!("tick_brain", neurons = neuron_count).entered();
-            brain.tick();
-        }
+        // Brain rechnen lassen
+        brain.tick();
 
-        // output neuronen auslesen
-        let rotation_neuron_output = brain.read_neuron(1).unwrap();
-        let acceleration_neuron_output = brain.read_neuron(2).unwrap();
+        // Output neuronen auslesen
+        let rotation_neuron_output = brain.read_neuron(5).unwrap();
+        let acceleration_neuron_output = brain.read_neuron(6).unwrap();
+        let want_child_neuron_output = brain.read_neuron(7).unwrap();
 
-        // rotieren und geschwindigkeit passend verändern
+        // Rotieren und geschwindigkeit passend verändern
         **rotation += rotation_neuron_output * chunk_settings.rotation_speed_max;
         let new_velocity = Velocity {
             x: velocity.x
@@ -272,11 +292,13 @@ pub fn tick_cells(
             y: velocity.y
                 + rotation.sin() * acceleration_neuron_output * chunk_settings.acceleration_max,
         };
-        // kinetische energie berechnen und von energie abziehen
+
+        // Kinetische energie berechnen und von energie abziehen
         let kinetic_energy = velocity.x * velocity.x + velocity.y * velocity.y;
         let new_kinetic_energy = new_velocity.x * new_velocity.x + new_velocity.y * new_velocity.y;
         **energy -= (new_kinetic_energy - kinetic_energy).abs();
-        // geschwindikeit und position berechen
+
+        // Geschwindikeit und position berechen
         *velocity = new_velocity;
         position.x += velocity.x;
         position.y += velocity.y;
@@ -290,96 +312,101 @@ pub fn tick_cells(
         }
         velocity.x *= 1. - chunk_settings.velocity_damping;
         velocity.y *= 1. - chunk_settings.velocity_damping;
-        // essen einsammeln
-        {
-            // kollisionen berechnen
-            let _calculate_collisions_span = info_span!("calculate_collisions").entered();
-            // benötigte distanz berechen (squared um sqrt(x) zu vermeiden)
-            let distance_min_squared = (simulation_settings.cell_radius
-                + simulation_settings.food_radius)
-                * (simulation_settings.cell_radius + simulation_settings.food_radius);
-            // tatsächliche kollisionen berechnen
-            let mut chunk_entities = Vec::with_capacity(9);
-            for jdx in -1..1 {
-                if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
-                    for jdy in -1..1 {
-                        if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
-                            chunk_entities.push(
-                                chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
-                            );
-                        }
-                    }
-                }
-            }
-            for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
-                let mut food_query_iter = food_query.iter_many_mut(&**foodlist);
-                while let Some((_, food_position, mut food_energy)) = food_query_iter.fetch_next() {
-                    let food_relative_position = Position {
-                        x: food_position.x - position.x,
-                        y: food_position.y - position.y,
-                    };
-                    let distance_squared = food_relative_position.x * food_relative_position.x
-                        + food_relative_position.y * food_relative_position.y;
-                    if distance_squared < distance_min_squared {
-                        // essen leersaugen
-                        **energy += **food_energy;
-                        **food_energy = 0.;
+
+        // Essen einsammeln
+
+        // Benötigte distanz berechen (squared um sqrt(x) zu vermeiden)
+        let distance_min_squared = (simulation_settings.cell_radius
+            + simulation_settings.food_radius)
+            * (simulation_settings.cell_radius + simulation_settings.food_radius);
+
+        // Tatsächliche kollisionen berechnen
+        let mut chunk_entities = Vec::with_capacity(9);
+        for jdx in -1..1 {
+            if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
+                for jdy in -1..1 {
+                    if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
+                        chunk_entities.push(
+                            chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
+                        );
                     }
                 }
             }
         }
-        // kind spawnen
-        if **energy > 200. {
+        for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
+            let mut food_query_iter = food_query.iter_many_mut(&**foodlist);
+            while let Some((_, food_position, mut food_energy)) = food_query_iter.fetch_next() {
+                let food_relative_position = Position {
+                    x: food_position.x - position.x,
+                    y: food_position.y - position.y,
+                };
+                let distance_squared = food_relative_position.x * food_relative_position.x
+                    + food_relative_position.y * food_relative_position.y;
+                if distance_squared < distance_min_squared {
+                    // Essen leersaugen
+                    **energy += **food_energy;
+                    **food_energy = 0.;
+                }
+            }
+        }
+
+        // Kind spawnen
+        if want_child_neuron_output.is_sign_positive()
+            && **energy > simulation_settings.energy_required_for_split
+        {
+            // Update stats
+            cells_born += 1;
             stats.children_count += 1;
+
+            // Child-Brain erstellen
             let mut child_brain = brain.clone();
             child_brain.mutate();
-            let child_brain_neuron_count = child_brain.neurons().len();
-            brain_size_statistic_ui
-                .neuron_count_points
-                .push([**tick as f64, child_brain_neuron_count as f64]);
-            let mut connection_count = 0;
-            for neuron in child_brain.neurons() {
-                connection_count += neuron.inputs.len();
-            }
-            brain_size_statistic_ui
-                .connection_count_points
-                .push([**tick as f64, connection_count as f64]);
+
+            // Neu Energiewerte berechnen
+            let new_energy = **energy / 2.;
+            **energy = new_energy;
+
+            // Spawn child
             commands.spawn(CellBundle {
                 position: Position {
                     x: position.x,
                     y: position.y,
                 },
                 rotation: Rotation(**rotation),
-                energy: Energy(**energy / 2.),
+                energy: Energy(new_energy),
                 brain: child_brain,
                 ..default()
             });
-            **energy /= 2.;
         }
         **energy -= simulation_settings.base_energy_drain
             + neuron_count as f32 * simulation_settings.neuron_energy_drain
             + connection_count as f32 * simulation_settings.connection_energy_drain;
         stats.age += 1;
     }
-    cell_count_statistic_ui
-        .points
-        .push([**tick as f64, cell_count as f64]);
+
+    // Statistiken schreiben
+    cell_count_statistic_query.single_mut().lines[0]
+        .data_points
+        .push(cell_count as f32);
+    cell_count_statistic_query.single_mut().lines[1]
+        .data_points
+        .push(cells_born as f32);
     if cell_count > 0 {
-        child_count_statistic_ui
-            .avg_points
-            .push([**tick as f64, children_count_sum as f64 / cell_count as f64]);
-        brain_size_statistic_ui
-            .avg_neuron_count_points
-            .push([**tick as f64, neuron_count_sum as f64 / cell_count as f64]);
-        brain_size_statistic_ui.avg_connection_count_points.push([
-            **tick as f64,
-            connection_count_sum as f64 / cell_count as f64,
-        ]);
-        brain_size_statistic_ui.avg_ratio_points.push([
-            **tick as f64,
-            (connection_count_sum as f64 / cell_count as f64)
-                / (neuron_count_sum as f64 / cell_count as f64),
-        ]);
+        child_count_statistic_query.single_mut().lines[0]
+            .data_points
+            .push(children_count_sum as f32 / cell_count as f32);
+        brain_size_statistic_query.single_mut().lines[0]
+            .data_points
+            .push(neuron_count_sum as f32 / cell_count as f32);
+        brain_size_statistic_query.single_mut().lines[1]
+            .data_points
+            .push(connection_count_sum as f32 / cell_count as f32);
+        brain_size_statistic_query.single_mut().lines[2]
+            .data_points
+            .push(
+                (connection_count_sum as f32 / cell_count as f32)
+                    / (neuron_count_sum as f32 / cell_count as f32),
+            );
     }
 }
 
@@ -420,7 +447,7 @@ pub fn spawn_food(
 }
 
 pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy), With<Food>>) {
-    // essen ohne energie löschen
+    // Essen ohne energie löschen
     for (entity, energy) in &food_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
@@ -430,41 +457,36 @@ pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy),
 
 pub fn despawn_cells(
     mut commands: Commands,
-    mut child_count_statistic_ui: ResMut<ChildCountStatisticUi>,
-    tick: Res<Tick>,
-    cell_query: Query<(Entity, &Energy, &CellStats), With<Cell>>,
+    mut cell_count_statistic_query: Query<&mut StatisticData, With<CellCountStatistic>>,
+    cell_query: Query<(Entity, &Energy), With<Cell>>,
 ) {
-    // zellen ohne energie löschen
-    for (entity, energy, stats) in &cell_query {
+    // Zellen ohne energie löschen
+    let mut cells_died = 0;
+    for (entity, energy) in &cell_query {
         if **energy <= 0. {
+            cells_died += 1;
             commands.entity(entity).despawn();
-            child_count_statistic_ui
-                .points
-                .push([**tick as f64, stats.children_count as f64]);
         }
     }
+
+    // Statistiken schreiben
+    cell_count_statistic_query.single_mut().lines[2]
+        .data_points
+        .push(cells_died as f32);
 }
 
-#[derive(Default, Deref, DerefMut)]
-pub struct TickWatch(pub Stopwatch);
-
-#[derive(Resource, Default, Deref, DerefMut)]
-pub struct Tick(pub u64);
-
 pub fn run_on_tick(
-    mut tick_timer: Local<TickWatch>,
+    mut tick_watch: Local<Stopwatch>,
     mut control_center_ui: ResMut<ControlCenterUi>,
-    mut tick: ResMut<Tick>,
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
     if !simulation_settings.paused
-        && tick_timer.tick(time.delta()).elapsed_secs() >= simulation_settings.tick_delta_seconds
+        && tick_watch.tick(time.delta()).elapsed_secs() >= simulation_settings.tick_delta_seconds
     {
         control_center_ui.actual_tick_delta_seconds_label =
-            format!("{:.3}", tick_timer.elapsed_secs());
-        tick_timer.reset();
-        **tick += 1;
+            format!("{:.3}", tick_watch.elapsed_secs());
+        tick_watch.reset();
         ShouldRun::Yes
     } else {
         ShouldRun::No
@@ -557,7 +579,8 @@ pub fn apply_simulation_settings(
             base_energy_drain: control_center_ui.base_energy_drain_drag_value,
             neuron_energy_drain: control_center_ui.neuron_energy_drain_drag_value,
             connection_energy_drain: control_center_ui.connection_energy_drain_drag_value,
-            ..*simulation_settings
+            energy_required_for_split: control_center_ui.energy_required_for_split_drag_value,
+            paused: simulation_settings.paused,
         };
     }
 }
@@ -591,7 +614,7 @@ pub fn save(world: &World, save_events: EventReader<Save>) {
         let scene = DynamicScene::from_world(world, type_registry);
         let serialized_scene = scene.serialize_ron(type_registry).unwrap();
         if fs::write(Path::new("save.scn.ron"), serialized_scene).is_err() {
-            warn!("error writing scene to disk");
+            warn!("error writing save to disk");
         }
     }
 }

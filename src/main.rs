@@ -3,10 +3,13 @@ use bevy_egui::EguiPlugin;
 use brain::{Brain, Neuron, NeuronInput};
 use sim::{
     ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Chunk, ChunkList, ChunkSettings,
-    Clear, Energy, Food, Foodlist, Position, Rotation, Save, SimulationSettings, SpawnCell, Tick,
+    Clear, Energy, Food, Foodlist, Position, Rotation, Save, SimulationSettings, SpawnCell,
     TogglePause, Velocity,
 };
-use ui::{BrainSizeStatisticUi, CellCountStatisticUi, ChildCountStatisticUi, ControlCenterUi};
+use ui::{
+    BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, IsOpen, Label,
+    Statistic, StatisticData, StatisticLine,
+};
 
 mod brain;
 mod sim;
@@ -38,27 +41,31 @@ fn main() {
         .register_type::<Energy>()
         .register_type::<CellStats>()
         .register_type::<Brain>()
-        .register_type::<Neuron>().register_type::<NeuronInput>()
+        .register_type::<Neuron>()
+        .register_type::<NeuronInput>()
+        .register_type::<Label>()
+        .register_type::<IsOpen>()
+        .register_type::<StatisticData>()
+        .register_type::<StatisticLine>()
         .register_type::<Cell>()
         .register_type::<Food>()
         .register_type::<Chunk>()
+        .register_type::<Statistic>()
+        .register_type::<ChildCountStatistic>()
+        .register_type::<CellCountStatistic>()
+        .register_type::<BrainSizeStatistic>()
         // Simulation ressources
-        .init_resource::<Tick>()
         .init_resource::<SimulationSettings>()
         .init_resource::<ChunkList>()
         // Ui state ressources
         .init_resource::<ControlCenterUi>()
-        .init_resource::<ChildCountStatisticUi>()
-        .init_resource::<CellCountStatisticUi>()
-        .init_resource::<BrainSizeStatisticUi>()
         // Setup
-        .add_startup_system(sim::setup)
+        .add_startup_system(sim::setup_chunks)
+        .add_startup_system(ui::setup_statistics)
         // Ui zeichnen
-        .add_system(ui::display_simulation_ui)
-        .add_system(ui::display_control_center_ui)
-        .add_system(ui::display_child_count_statistic_ui)
-        .add_system(ui::display_cell_count_statistic_ui)
-        .add_system(ui::display_brain_size_statistic_ui)
+        .add_system(ui::display_simulation)
+        .add_system(ui::display_control_center)
+        .add_system(ui::display_statistics)
         // Ui Event-Handler
         .add_system(sim::spawn_cells)
         .add_system(sim::apply_chunk_settings)

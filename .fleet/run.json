@@ -20,10 +20,5 @@
             "name": "clean",
             "cargoArgs": [ "clean" ],
         },
-        {
-            "type": "cargo",
-            "name": "run profiling",
-            "cargoArgs": [ "run", "--release", "--features", "bevy/trace_chrome" ],
-        },
     ]
 }
