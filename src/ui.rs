@@ -1,8 +1,8 @@
+use crate::brain::Brain;
 use crate::sim::{
     ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Energy, Food, Position, Save,
     SimulationSettings, SpawnCell, TogglePause,
 };
-use crate::brain::Brain;
 use bevy::prelude::*;
 use bevy_egui::{
     egui::{
@@ -101,7 +101,7 @@ pub fn display_control_center(
                             .speed(0.01),
                     );
                     grid_ui.end_row();
-                    grid_ui.label("Neuron rnergy drain: ");
+                    grid_ui.label("Neuron energy drain: ");
                     grid_ui.add(
                         DragValue::new(&mut control_center_ui.neuron_energy_drain_drag_value)
                             .speed(0.001),
@@ -316,7 +316,7 @@ pub fn display_simulation(
                             y: curser_postition.y as f32 - position.y,
                         };
                         let distance_squared = relative_position.x * relative_position.x
-                                               + relative_position.y * relative_position.y;
+                            + relative_position.y * relative_position.y;
                         if distance_squared < nearest_cell_distance_squared {
                             nearest_cell_distance_squared = distance_squared;
                             nearest_cell_entity = Some(entiy);
@@ -489,37 +489,50 @@ pub fn display_brain_inspector(
         .open(&mut brain_inspector_ui.is_open)
         .show(egui_context.ctx_mut(), |ui| {
             Plot::new("brain_inspector_plot")
-            .legend(default())
-            .show(ui, |plot_ui| {
-                let mut neuron_positons = Vec::new();
-                for idx in 0..selected_brain.neurons().len() {
-                    neuron_positons.push([(idx % 4) as f64, (idx / 4) as f64]);
-                }
-                let mut connection_position_origins = Vec::new();
-                let mut connection_position_tips = Vec::new();
-                let mut connection_weights = Vec::new();
-                for (idx, neuron) in selected_brain.neurons().iter().enumerate() {
-                    for input in &neuron.inputs {
-                        connection_position_origins.push(neuron_positons[idx]);
-                        connection_position_tips.push(neuron_positons[input.neuron_index]);
-                        connection_weights.push(input.weight);
+                .legend(default())
+                .show(ui, |plot_ui| {
+                    let mut neuron_positons = Vec::new();
+                    for idx in 0..selected_brain.neurons().len() {
+                        neuron_positons.push([(idx % 4) as f64, (idx / 4) as f64]);
                     }
-                }
+                    let mut connection_position_origins = Vec::new();
+                    let mut connection_position_tips = Vec::new();
+                    let mut connection_weights = Vec::new();
+                    for (idx, neuron) in selected_brain.neurons().iter().enumerate() {
+                        for input in &neuron.inputs {
+                            connection_position_origins.push(neuron_positons[idx]);
+                            connection_position_tips.push(neuron_positons[input.neuron_index]);
+                            connection_weights.push(input.weight);
+                        }
+                    }
 
-                plot_ui.points(
-                    Points::new(PlotPoints::new(neuron_positons))
-                        .radius(8.)
-                        .color(Rgba::from_rgb(0.129, 0.145, 0.569))
-                        .name("Neuron"),
-                );
-                for idx in 0..connection_position_origins.len() {
-                    plot_ui.line(
-                        Line::new(vec![connection_position_origins[idx], connection_position_tips[idx]])
-                            .width(connection_weights[idx].abs() * 2.)
-                        .color(if connection_weights[idx].is_sign_positive() { Rgba::from_rgb(0.145, 0.569, 0.129) } else { Rgba::from_rgb(0.569, 0.129, 0.145) })
-                            .name(if connection_weights[idx].is_sign_positive() { "Positive connection" } else { "Negative connection" })
+                    plot_ui.points(
+                        Points::new(PlotPoints::new(neuron_positons))
+                            .radius(8.)
+                            .color(Rgba::from_rgb(0.129, 0.145, 0.569))
+                            .name("Neuron"),
                     );
-                }
-            });
+                    for idx in 0..connection_position_origins.len() {
+                        plot_ui.line(
+                            Line::new(vec![
+                                connection_position_origins[idx],
+                                connection_position_tips[idx],
+                            ])
+                            .width(connection_weights[idx].abs() * 2.)
+                            .color(if connection_weights[idx].is_sign_positive() {
+                                Rgba::from_rgb(0.145, 0.569, 0.129)
+                            } else {
+                                Rgba::from_rgb(0.569, 0.129, 0.145)
+                            })
+                            .name(
+                                if connection_weights[idx].is_sign_positive() {
+                                    "Positive connection"
+                                } else {
+                                    "Negative connection"
+                                },
+                            ),
+                        );
+                    }
+                });
         });
 }

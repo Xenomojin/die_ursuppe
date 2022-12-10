@@ -7,8 +7,8 @@ use sim::{
     TogglePause, Velocity,
 };
 use ui::{
-    BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, IsOpen, Label,
-    Statistic, StatisticData, StatisticLine, BrainInspectorUi
+    BrainInspectorUi, BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi,
+    IsOpen, Label, Statistic, StatisticData, StatisticLine,
 };
 
 mod brain;
