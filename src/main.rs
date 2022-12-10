@@ -8,7 +8,7 @@ use sim::{
 };
 use ui::{
     BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, IsOpen, Label,
-    Statistic, StatisticData, StatisticLine,
+    Statistic, StatisticData, StatisticLine, BrainInspectorUi
 };
 
 mod brain;
@@ -54,11 +54,11 @@ fn main() {
         .register_type::<ChildCountStatistic>()
         .register_type::<CellCountStatistic>()
         .register_type::<BrainSizeStatistic>()
-        // Simulation ressources
+        // Init ressources
         .init_resource::<SimulationSettings>()
         .init_resource::<ChunkList>()
-        // Ui state ressources
         .init_resource::<ControlCenterUi>()
+        .init_resource::<BrainInspectorUi>()
         // Setup
         .add_startup_system(sim::setup_chunks)
         .add_startup_system(ui::setup_statistics)
@@ -66,6 +66,7 @@ fn main() {
         .add_system(ui::display_simulation)
         .add_system(ui::display_control_center)
         .add_system(ui::display_statistics)
+        .add_system(ui::display_brain_inspector)
         // Ui Event-Handler
         .add_system(sim::spawn_cells)
         .add_system(sim::apply_chunk_settings)

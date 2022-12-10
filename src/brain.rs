@@ -47,14 +47,14 @@ impl Brain {
                     output: 0.,
                 };
                 new_neuron.inputs.push(NeuronInput {
-                    neuron_id: (random::<f32>() * self.neurons.len() as f32) as usize,
+                    neuron_index: (random::<f32>() * self.neurons.len() as f32) as usize,
                     weight: random::<f32>() * 2. - 1.,
                 });
                 let neurons_len = self.neurons.len();
                 self.neurons[(random::<f32>() * neurons_len as f32) as usize]
                     .inputs
                     .push(NeuronInput {
-                        neuron_id: neurons_len,
+                        neuron_index: neurons_len,
                         weight: (random::<f32>() * 2. - 1.),
                     });
                 self.neurons.push(new_neuron);
@@ -70,15 +70,15 @@ impl Brain {
                 for neuron in &mut self.neurons {
                     let mut input_index = 0;
                     while input_index < neuron.inputs.len() {
-                        if neuron.inputs[input_index].neuron_id == to_delete_neuron_id {
+                        if neuron.inputs[input_index].neuron_index == to_delete_neuron_id {
                             neuron.inputs.remove(input_index);
                         } else {
                             input_index += 1;
                         }
                     }
                     for input in &mut neuron.inputs {
-                        if input.neuron_id > to_delete_neuron_id {
-                            input.neuron_id -= 1;
+                        if input.neuron_index > to_delete_neuron_id {
+                            input.neuron_index -= 1;
                         }
                     }
                 }
@@ -96,7 +96,7 @@ impl Brain {
                 self.neurons[new_connection_to_neuron_id]
                     .inputs
                     .push(NeuronInput {
-                        neuron_id: new_connection_from_neuron_id,
+                        neuron_index: new_connection_from_neuron_id,
                         weight: (random::<f32>() * 2. - 1.),
                     });
             }
@@ -132,8 +132,8 @@ impl Brain {
     /// # Funktion WriteNeuron
     /// Gibt den [Output] für ein bestimmtes [Neuron] zurück\
     /// (Falls es existiert, sonst [None])
-    pub fn read_neuron(&self, neuron_id: usize) -> Option<f32> {
-        if let Some(neuron) = self.neurons.get(neuron_id) {
+    pub fn read_neuron(&self, neuron_index: usize) -> Option<f32> {
+        if let Some(neuron) = self.neurons.get(neuron_index) {
             Some(neuron.output)
         } else {
             None
@@ -143,8 +143,8 @@ impl Brain {
     /// # Funktion WriteNeuron
     /// Setzt den [Output] für ein bestimmtes [Neuron].\
     /// (Falls es existiert)
-    pub fn write_neuron(&mut self, neuron_id: usize, value: f32) {
-        if let Some(neuron) = self.neurons.get_mut(neuron_id) {
+    pub fn write_neuron(&mut self, neuron_index: usize, value: f32) {
+        if let Some(neuron) = self.neurons.get_mut(neuron_index) {
             neuron.output = value;
         }
     }
@@ -163,7 +163,7 @@ impl Brain {
         for neuron in &self.neurons {
             let mut new_output = neuron.bias;
             for neuron_input in &neuron.inputs {
-                new_output += self.neurons[neuron_input.neuron_id].output * neuron_input.weight;
+                new_output += self.neurons[neuron_input.neuron_index].output * neuron_input.weight;
             }
             new_output = ACTIVATION_FUNCTION(new_output);
             outputs_temp.push(new_output);
@@ -188,6 +188,6 @@ pub struct Neuron {
 
 #[derive(Debug, Clone, Reflect, FromReflect)]
 pub struct NeuronInput {
-    pub neuron_id: usize,
+    pub neuron_index: usize,
     pub weight: f32,
 }

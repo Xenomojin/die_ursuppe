@@ -69,7 +69,7 @@ pub struct ChunkSettings {
 impl Default for ChunkSettings {
     fn default() -> Self {
         Self {
-            spawn_chance: 0.,
+            spawn_chance: 0.02,
             spawned_food_energy: 200.,
             rotation_speed_max: 1.,
             acceleration_max: 2.,
@@ -336,12 +336,12 @@ pub fn tick_cells(
         for (foodlist, _) in chunk_query.iter_many(chunk_entities) {
             let mut food_query_iter = food_query.iter_many_mut(&**foodlist);
             while let Some((_, food_position, mut food_energy)) = food_query_iter.fetch_next() {
-                let food_relative_position = Position {
+                let relative_position = Position {
                     x: food_position.x - position.x,
                     y: food_position.y - position.y,
                 };
-                let distance_squared = food_relative_position.x * food_relative_position.x
-                    + food_relative_position.y * food_relative_position.y;
+                let distance_squared = relative_position.x * relative_position.x
+                    + relative_position.y * relative_position.y;
                 if distance_squared < distance_min_squared {
                     // Essen leersaugen
                     **energy += **food_energy;
