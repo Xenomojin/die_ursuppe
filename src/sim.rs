@@ -24,6 +24,8 @@ pub struct SimulationSettings {
     pub neuron_energy_drain: f32,
     pub connection_energy_drain: f32,
     pub energy_required_for_split: f32,
+    pub rotation_speed_max: f32,
+    pub acceleration_max: f32,
     /// Die estrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
     /// Ob die Simulation pausiert ist
@@ -39,7 +41,9 @@ impl Default for SimulationSettings {
             base_energy_drain: 0.4,
             neuron_energy_drain: 0.01,
             connection_energy_drain: 0.004,
-            energy_required_for_split: 20.,
+            energy_required_for_split: 10.,
+            rotation_speed_max: 1.,
+            acceleration_max: 1.7,
             tick_delta_seconds: 0.02,
             paused: true,
         }
@@ -60,8 +64,6 @@ pub struct ChunkSettings {
     pub spawn_chance: f32,
     /// Die Energie mit der das Essen gespawned wird.
     pub spawned_food_energy: f32,
-    pub rotation_speed_max: f32,
-    pub acceleration_max: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
     pub velocity_damping: f32,
 }
@@ -69,10 +71,8 @@ pub struct ChunkSettings {
 impl Default for ChunkSettings {
     fn default() -> Self {
         Self {
-            spawn_chance: 0.02,
+            spawn_chance: 0.018,
             spawned_food_energy: 200.,
-            rotation_speed_max: 1.,
-            acceleration_max: 2.,
             velocity_damping: 0.4,
         }
     }
@@ -107,7 +107,7 @@ pub struct Energy(pub f32);
 #[reflect(Component)]
 pub struct CellStats {
     pub age: u32,
-    pub children_count: u32,
+    pub child_count: u32,
 }
 
 #[derive(Default, Component, Reflect)]
@@ -228,7 +228,7 @@ pub fn tick_cells(
 
         // Statistic informationen sammeln
         cell_count += 1;
-        children_count_sum += stats.children_count;
+        children_count_sum += stats.child_count;
         neuron_count_sum += neuron_count;
         connection_count_sum += connection_count;
 
@@ -285,12 +285,16 @@ pub fn tick_cells(
         let want_child_neuron_output = brain.read_neuron(7).unwrap();
 
         // Rotieren und geschwindigkeit passend verändern
-        **rotation += rotation_neuron_output * chunk_settings.rotation_speed_max;
+        **rotation += rotation_neuron_output * simulation_settings.rotation_speed_max;
         let new_velocity = Velocity {
             x: velocity.x
-                + rotation.cos() * acceleration_neuron_output * chunk_settings.acceleration_max,
+                + rotation.cos()
+                    * acceleration_neuron_output
+                    * simulation_settings.acceleration_max,
             y: velocity.y
-                + rotation.sin() * acceleration_neuron_output * chunk_settings.acceleration_max,
+                + rotation.sin()
+                    * acceleration_neuron_output
+                    * simulation_settings.acceleration_max,
         };
 
         // Kinetische energie berechnen und von energie abziehen
@@ -356,7 +360,7 @@ pub fn tick_cells(
         {
             // Update stats
             cells_born += 1;
-            stats.children_count += 1;
+            stats.child_count += 1;
 
             // Child-Brain erstellen
             let mut child_brain = brain.clone();
@@ -552,8 +556,6 @@ pub fn apply_chunk_settings(
                 spawn_chance: spawn_chance_left
                     + (spawn_chance_right - spawn_chance_left) * chunk_idx / MAP_SIZE as f32,
                 spawned_food_energy: control_center_ui.food_energy_drag_value,
-                rotation_speed_max: control_center_ui.rotation_speed_max_drag_value,
-                acceleration_max: control_center_ui.acceleration_max_drag_value,
                 velocity_damping: velocity_damping_bottom
                     + (velocity_damping_top - velocity_damping_bottom) * chunk_idy
                         / MAP_SIZE as f32,
@@ -580,6 +582,8 @@ pub fn apply_simulation_settings(
             neuron_energy_drain: control_center_ui.neuron_energy_drain_drag_value,
             connection_energy_drain: control_center_ui.connection_energy_drain_drag_value,
             energy_required_for_split: control_center_ui.energy_required_for_split_drag_value,
+            rotation_speed_max: control_center_ui.rotation_speed_max_drag_value,
+            acceleration_max: control_center_ui.acceleration_max_drag_value,
             paused: simulation_settings.paused,
         };
     }

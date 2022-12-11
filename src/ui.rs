@@ -1,7 +1,7 @@
 use crate::brain::Brain;
 use crate::sim::{
-    ApplyChunkSettings, ApplySimulationSettings, Cell, Clear, Energy, Food, Position, Save,
-    SimulationSettings, SpawnCell, TogglePause,
+    ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Clear, Energy, Food, Position,
+    Save, SimulationSettings, SpawnCell, TogglePause,
 };
 use bevy::prelude::*;
 use bevy_egui::{
@@ -23,11 +23,11 @@ pub struct ControlCenterUi {
     pub neuron_energy_drain_drag_value: f32,
     pub connection_energy_drain_drag_value: f32,
     pub energy_required_for_split_drag_value: f32,
+    pub rotation_speed_max_drag_value: f32,
+    pub acceleration_max_drag_value: f32,
     /// Start Energy-Wert für zukünftige manuell gespawnte cells
     pub cell_energy_drag_value: f32,
     pub cell_amount_slider: u32,
-    pub rotation_speed_max_drag_value: f32,
-    pub acceleration_max_drag_value: f32,
     /// Energy-Wert für zukünftiges food
     pub food_energy_drag_value: f32,
     pub food_spawn_chance_slider_left: f32,
@@ -49,16 +49,16 @@ impl Default for ControlCenterUi {
             base_energy_drain_drag_value: 0.4,
             neuron_energy_drain_drag_value: 0.01,
             connection_energy_drain_drag_value: 0.004,
-            energy_required_for_split_drag_value: 20.,
+            energy_required_for_split_drag_value: 10.,
+            rotation_speed_max_drag_value: 1.,
+            acceleration_max_drag_value: 1.7,
             cell_energy_drag_value: 199.,
             cell_amount_slider: 50,
-            rotation_speed_max_drag_value: 1.,
-            acceleration_max_drag_value: 2.,
             velocity_damping_slider_bottom: 0.4,
             velocity_damping_slider_top: 0.4,
             food_energy_drag_value: 200.,
-            food_spawn_chance_slider_left: 0.02,
-            food_spawn_chance_slider_right: 0.02,
+            food_spawn_chance_slider_left: 0.018,
+            food_spawn_chance_slider_right: 0.018,
         }
     }
 }
@@ -119,6 +119,18 @@ pub fn display_control_center(
                             .speed(0.1),
                     );
                     grid_ui.end_row();
+                    grid_ui.label("Rotation speed max.: ");
+                    grid_ui.add(
+                        DragValue::new(&mut control_center_ui.rotation_speed_max_drag_value)
+                            .speed(0.01),
+                    );
+                    grid_ui.end_row();
+                    grid_ui.label("Acceleration max.: ");
+                    grid_ui.add(
+                        DragValue::new(&mut control_center_ui.acceleration_max_drag_value)
+                            .speed(0.01),
+                    );
+                    grid_ui.end_row();
                     grid_ui.label("Cell radius: ");
                     grid_ui.add(
                         DragValue::new(&mut control_center_ui.cell_radius_drag_value).speed(0.01),
@@ -171,18 +183,6 @@ pub fn display_control_center(
             ui.collapsing("Chunk Settings", |collapsing_ui| {
                 Grid::new("chunk_settings_grid").show(collapsing_ui, |grid_ui| {
                     grid_ui.colored_label(Rgba::from_rgb(0.145, 0.569, 0.129), "- Cells -");
-                    grid_ui.end_row();
-                    grid_ui.label("Rotation speed max.: ");
-                    grid_ui.add(
-                        DragValue::new(&mut control_center_ui.rotation_speed_max_drag_value)
-                            .speed(0.01),
-                    );
-                    grid_ui.end_row();
-                    grid_ui.label("Acceleration max.: ");
-                    grid_ui.add(
-                        DragValue::new(&mut control_center_ui.acceleration_max_drag_value)
-                            .speed(0.01),
-                    );
                     grid_ui.end_row();
                     grid_ui.label("Velocity damping bottom: ");
                     grid_ui.add(Slider::new(
@@ -247,7 +247,7 @@ pub fn display_control_center(
 
 pub fn display_simulation(
     mut egui_context: ResMut<EguiContext>,
-    mut brain_inspector_ui: ResMut<BrainInspectorUi>,
+    mut cell_inspector_ui: ResMut<CellInspectorUi>,
     simulation_settings: Res<SimulationSettings>,
     cell_query: Query<(Entity, &Position, &Energy), With<Cell>>,
     food_query: Query<&Position, With<Food>>,
@@ -258,55 +258,74 @@ pub fn display_simulation(
             .view_aspect(1.)
             .legend(default())
             .show(ui, |plot_ui| {
+                // Food daten sammeln
                 let mut food_points = Vec::new();
                 for position in &food_query {
                     food_points.push([position.x as f64, position.y as f64]);
                 }
+
+                // Food zeichnen
                 plot_ui.points(
                     Points::new(PlotPoints::new(food_points))
                         .radius(simulation_settings.food_radius)
                         .color(Rgba::from_rgb(0.145, 0.569, 0.129))
                         .name("Food"),
                 );
-                let mut cell_points_by_energy =
-                    vec![Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-                let colors_by_energy = [
+
+                // Cell daten sammeln
+                let mut cell_point_groups = vec![
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                ];
+                let group_colors = [
+                    Rgba::from_gray(0.8),
                     Rgba::from_rgb(0.569, 0.129, 0.145) * 0.2,
                     Rgba::from_rgb(0.569, 0.129, 0.145) * 0.4,
                     Rgba::from_rgb(0.569, 0.129, 0.145) * 0.6,
                     Rgba::from_rgb(0.569, 0.129, 0.145) * 0.8,
                     Rgba::from_rgb(0.569, 0.129, 0.145),
                 ];
-                let labels_by_energy = [
+                let group_labels = [
+                    "Selected cell",
                     "Cell < 50 energy",
                     "Cell < 100 energy",
                     "Cell < 200 energy",
                     "Cell < 400 energy",
                     "Cell > 400 energy",
                 ];
-                for (_, position, energy) in &cell_query {
-                    if **energy < 50. {
-                        cell_points_by_energy[0].push([position.x as f64, position.y as f64]);
+                for (entity, position, energy) in &cell_query {
+                    let group = if Some(entity) == cell_inspector_ui.selected_cell {
+                        0
+                    } else if **energy < 50. {
+                        1
                     } else if **energy < 100. {
-                        cell_points_by_energy[1].push([position.x as f64, position.y as f64]);
+                        2
                     } else if **energy < 200. {
-                        cell_points_by_energy[2].push([position.x as f64, position.y as f64]);
+                        3
                     } else if **energy < 400. {
-                        cell_points_by_energy[3].push([position.x as f64, position.y as f64]);
+                        4
                     } else {
-                        cell_points_by_energy[4].push([position.x as f64, position.y as f64]);
-                    }
+                        5
+                    };
+                    cell_point_groups[group].push([position.x as f64, position.y as f64]);
                 }
-                for idx in 0..5 {
+
+                // Cells zeichnen
+                for idx in 0..cell_point_groups.len() {
                     plot_ui.points(
-                        Points::new(PlotPoints::new(cell_points_by_energy[idx].clone()))
+                        Points::new(PlotPoints::new(cell_point_groups[idx].clone()))
                             .radius(simulation_settings.cell_radius)
-                            .color(colors_by_energy[idx])
-                            .name(labels_by_energy[idx]),
+                            .color(group_colors[idx])
+                            .name(group_labels[idx]),
                     );
                 }
 
                 if plot_ui.plot_clicked() {
+                    // Zelle finden, die am nächsten zu Cursor ist und selecten
                     let curser_postition = plot_ui.pointer_coordinate().unwrap();
                     let mut nearest_cell_entity = None;
                     let mut nearest_cell_distance_squared = f32::INFINITY;
@@ -322,8 +341,7 @@ pub fn display_simulation(
                             nearest_cell_entity = Some(entiy);
                         }
                     }
-                    brain_inspector_ui.selected_cell = nearest_cell_entity;
-                    brain_inspector_ui.is_open = true;
+                    cell_inspector_ui.selected_cell = nearest_cell_entity;
                 }
             });
     });
@@ -467,38 +485,57 @@ pub fn display_statistics(
 }
 
 #[derive(Default, Resource)]
-pub struct BrainInspectorUi {
-    pub is_open: bool,
+pub struct CellInspectorUi {
     pub selected_cell: Option<Entity>,
 }
 
-pub fn display_brain_inspector(
+pub fn display_cell_inspector(
     mut egui_context: ResMut<EguiContext>,
-    mut brain_inspector_ui: ResMut<BrainInspectorUi>,
-    cell_query: Query<&Brain, With<Cell>>,
+    mut cell_inspector_ui: ResMut<CellInspectorUi>,
+    cell_query: Query<(&Brain, &Energy, &CellStats), With<Cell>>,
 ) {
-    let Some(selected_cell) = brain_inspector_ui.selected_cell else {
+    let Some(selected_cell) = cell_inspector_ui.selected_cell else {
         return
     };
-    let Ok(selected_brain) = cell_query.get(selected_cell) else {
-        brain_inspector_ui.selected_cell = None;
+    let Ok((brain, energy, stats)) = cell_query.get(selected_cell) else {
+        cell_inspector_ui.selected_cell = None;
         return
     };
-    Window::new("Brain Inspector")
+    let mut is_open = true;
+    Window::new("Cell Inspector")
         .resizable(true)
-        .open(&mut brain_inspector_ui.is_open)
+        .open(&mut is_open)
         .show(egui_context.ctx_mut(), |ui| {
-            Plot::new("brain_inspector_plot")
+            Grid::new("cell_inspector_grid").show(ui, |grid_ui| {
+                grid_ui.colored_label(Rgba::from_rgb(0.145, 0.569, 0.129), "- Stats -");
+                grid_ui.end_row();
+                grid_ui.label("Energy: ");
+                grid_ui.colored_label(Rgba::WHITE, format!("{:.0}", **energy));
+                grid_ui.end_row();
+                grid_ui.label("Age: ");
+                grid_ui.colored_label(Rgba::WHITE, format!("{} ticks", stats.age));
+                grid_ui.end_row();
+                grid_ui.label("Child count: ");
+                grid_ui.colored_label(Rgba::WHITE, format!("{}", stats.child_count));
+                grid_ui.end_row();
+                grid_ui.colored_label(Rgba::from_rgb(0.145, 0.569, 0.129), "- Brain -");
+                grid_ui.end_row();
+            });
+            Plot::new("brain_plot")
+                .data_aspect(1.)
                 .legend(default())
                 .show(ui, |plot_ui| {
+                    // Neuronen daten sammeln
                     let mut neuron_positons = Vec::new();
-                    for idx in 0..selected_brain.neurons().len() {
+                    for idx in 0..brain.neurons().len() {
                         neuron_positons.push([(idx % 4) as f64, (idx / 4) as f64]);
                     }
+
+                    // Connection daten sammeln
                     let mut connection_position_origins = Vec::new();
                     let mut connection_position_tips = Vec::new();
                     let mut connection_weights = Vec::new();
-                    for (idx, neuron) in selected_brain.neurons().iter().enumerate() {
+                    for (idx, neuron) in brain.neurons().iter().enumerate() {
                         for input in &neuron.inputs {
                             connection_position_origins.push(neuron_positons[idx]);
                             connection_position_tips.push(neuron_positons[input.neuron_index]);
@@ -506,12 +543,15 @@ pub fn display_brain_inspector(
                         }
                     }
 
+                    // Neuronen zeichnen
                     plot_ui.points(
                         Points::new(PlotPoints::new(neuron_positons))
                             .radius(8.)
                             .color(Rgba::from_rgb(0.129, 0.145, 0.569))
                             .name("Neuron"),
                     );
+
+                    // Connections zeichnen
                     for idx in 0..connection_position_origins.len() {
                         plot_ui.line(
                             Line::new(vec![
@@ -535,4 +575,7 @@ pub fn display_brain_inspector(
                     }
                 });
         });
+    if !is_open {
+        cell_inspector_ui.selected_cell = None;
+    }
 }
