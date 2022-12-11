@@ -1308,6 +1308,7 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "rand",
+ "serde",
 ]
 
 [[package]]

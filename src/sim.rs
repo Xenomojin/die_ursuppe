@@ -4,8 +4,9 @@ use crate::{
         BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, StatisticData,
     },
 };
-use bevy::{ecs::schedule::ShouldRun, prelude::*, time::Stopwatch};
+use bevy::{ecs::schedule::ShouldRun, prelude::*, scene, time::Stopwatch};
 use rand::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::{f32::consts::PI, fs, path::Path};
 
 /// Größe der Chunks
@@ -14,7 +15,7 @@ pub const CHUNK_SIZE: f32 = 50.;
 pub const MAP_SIZE: u32 = 40;
 
 /// Einstellungen für den Verlauf der Simulation
-#[derive(Resource)]
+#[derive(Resource, Serialize, Deserialize)]
 pub struct SimulationSettings {
     /// Raduis einer Zelle
     pub cell_radius: f32,
@@ -50,6 +51,9 @@ impl Default for SimulationSettings {
     }
 }
 
+#[derive(Default, Resource, Deref, DerefMut, Serialize, Deserialize)]
+pub struct ChunkList(Vec<Vec<Entity>>);
+
 #[derive(Default, Debug, Component, Deref, DerefMut, Reflect)]
 #[reflect(Component)]
 pub struct Foodlist(Vec<Entity>);
@@ -77,9 +81,6 @@ impl Default for ChunkSettings {
         }
     }
 }
-
-#[derive(Default, Resource, Deref, DerefMut)]
-pub struct ChunkList(Vec<Vec<Entity>>);
 
 #[derive(Default, Clone, Copy, Debug, Component, Reflect)]
 #[reflect(Component)]
@@ -524,11 +525,10 @@ pub struct Clear;
 /// Event-Handler für `Clear` Event
 pub fn clear(
     mut commands: Commands,
-    clear_events: EventReader<Clear>,
+    mut clear_events: EventReader<Clear>,
     entities_to_clear_query: Query<Entity, Or<(With<Cell>, With<Food>)>>,
 ) {
-    if !clear_events.is_empty() {
-        clear_events.clear();
+    for _ in clear_events.iter() {
         for entity in &entities_to_clear_query {
             commands.entity(entity).despawn();
         }
@@ -540,15 +540,14 @@ pub struct ApplyChunkSettings;
 /// Event-Handler für `Clear` Event
 pub fn apply_chunk_settings(
     mut chunk_query: Query<(&mut ChunkSettings, &Position), With<Chunk>>,
-    apply_chunk_settings_events: EventReader<ApplyChunkSettings>,
+    mut apply_chunk_settings_events: EventReader<ApplyChunkSettings>,
     control_center_ui: Res<ControlCenterUi>,
 ) {
     let spawn_chance_left = control_center_ui.food_spawn_chance_slider_left;
     let spawn_chance_right = control_center_ui.food_spawn_chance_slider_right;
     let velocity_damping_bottom = control_center_ui.velocity_damping_slider_bottom;
     let velocity_damping_top = control_center_ui.velocity_damping_slider_top;
-    if !apply_chunk_settings_events.is_empty() {
-        apply_chunk_settings_events.clear();
+    for _ in apply_chunk_settings_events.iter() {
         for (mut chunk_settings, chunk_position) in &mut chunk_query {
             let chunk_idx = (chunk_position.x / CHUNK_SIZE) as f32;
             let chunk_idy = (chunk_position.y / CHUNK_SIZE) as f32;
@@ -569,11 +568,10 @@ pub struct ApplySimulationSettings;
 /// Event-Handler für `ApplySimulationSettings` Event
 pub fn apply_simulation_settings(
     mut simulation_settings: ResMut<SimulationSettings>,
-    apply_simulation_settings_events: EventReader<ApplySimulationSettings>,
+    mut apply_simulation_settings_events: EventReader<ApplySimulationSettings>,
     control_center_ui: Res<ControlCenterUi>,
 ) {
-    if !apply_simulation_settings_events.is_empty() {
-        apply_simulation_settings_events.clear();
+    for _ in apply_simulation_settings_events.iter() {
         *simulation_settings = SimulationSettings {
             cell_radius: control_center_ui.cell_radius_drag_value,
             food_radius: control_center_ui.food_radius_drag_value,
@@ -594,31 +592,55 @@ pub struct TogglePause;
 /// Event-Handler für `TogglePause` Event
 pub fn toggle_pause(
     mut simulation_settings: ResMut<SimulationSettings>,
-    mut control_center_ui: ResMut<ControlCenterUi>,
-    toggle_pause_events: EventReader<TogglePause>,
+    mut toggle_pause_events: EventReader<TogglePause>,
 ) {
-    if !toggle_pause_events.is_empty() {
-        toggle_pause_events.clear();
+    for _ in toggle_pause_events.iter() {
         simulation_settings.paused = !simulation_settings.paused;
-        if simulation_settings.paused {
-            control_center_ui.pause_button_text = "Play".to_string();
-        } else {
-            control_center_ui.pause_button_text = "Pause".to_string();
-        }
     }
 }
 
-pub struct Save;
+pub struct Save {
+    pub save_name: String,
+}
 
 /// Event-Handler für `Save` Event
-pub fn save(world: &World, save_events: EventReader<Save>) {
-    if !save_events.is_empty() {
-        save_events.clear();
+pub fn save(
+    mut save_events: EventReader<Save>,
+    world: &World,
+    simulation_settings: Res<SimulationSettings>,
+    chunk_list: Res<ChunkList>,
+) {
+    for save_event in save_events.iter() {
+        // Ordner erstellen
+        fs::create_dir(Path::new(&save_event.save_name)).unwrap();
+
+        // Scene speichern
         let type_registry = world.resource::<AppTypeRegistry>();
         let scene = DynamicScene::from_world(world, type_registry);
         let serialized_scene = scene.serialize_ron(type_registry).unwrap();
-        if fs::write(Path::new("save.scn.ron"), serialized_scene).is_err() {
-            warn!("error writing save to disk");
-        }
+        fs::write(
+            Path::new(&format!("{}/scene.ron", &save_event.save_name)),
+            serialized_scene,
+        )
+        .unwrap();
+
+        // Simulation settings speichern
+        let serialized_simulation_settings = scene::serialize_ron(&*simulation_settings).unwrap();
+        fs::write(
+            Path::new(&format!(
+                "{}/simulation_settings.ron",
+                &save_event.save_name
+            )),
+            serialized_simulation_settings,
+        )
+        .unwrap();
+
+        // Chunk list speichern
+        let serialized_chunk_list = scene::serialize_ron(&*chunk_list).unwrap();
+        fs::write(
+            Path::new(&format!("{}/chunk_list.ron", &save_event.save_name)),
+            serialized_chunk_list,
+        )
+        .unwrap();
     }
 }

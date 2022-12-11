@@ -16,7 +16,6 @@ use bevy_egui::{
 pub struct ControlCenterUi {
     pub tick_delta_seconds_slider: f32,
     pub actual_tick_delta_seconds_label: String,
-    pub pause_button_text: String,
     pub cell_radius_drag_value: f32,
     pub food_radius_drag_value: f32,
     pub base_energy_drain_drag_value: f32,
@@ -36,6 +35,7 @@ pub struct ControlCenterUi {
     pub velocity_damping_slider_top: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
     pub velocity_damping_slider_bottom: f32,
+    pub save_name_text_edit: String,
 }
 
 impl Default for ControlCenterUi {
@@ -43,7 +43,6 @@ impl Default for ControlCenterUi {
         Self {
             tick_delta_seconds_slider: 0.02,
             actual_tick_delta_seconds_label: "-".to_string(),
-            pause_button_text: "Play".to_string(),
             cell_radius_drag_value: 5.,
             food_radius_drag_value: 3.,
             base_energy_drain_drag_value: 0.4,
@@ -59,6 +58,7 @@ impl Default for ControlCenterUi {
             food_energy_drag_value: 200.,
             food_spawn_chance_slider_left: 0.018,
             food_spawn_chance_slider_right: 0.018,
+            save_name_text_edit: "save".to_string(),
         }
     }
 }
@@ -73,6 +73,7 @@ pub fn display_control_center(
     mut clear_events: EventWriter<Clear>,
     mut save_events: EventWriter<Save>,
     mut statistic_query: Query<(&Label, &mut IsOpen), With<Statistic>>,
+    simulation_settings: Res<SimulationSettings>,
 ) {
     Window::new("Control Center")
         .resizable(true)
@@ -148,7 +149,11 @@ pub fn display_control_center(
                             apply_simulation_settings_events.send(ApplySimulationSettings);
                         }
                         if cell_ui
-                            .button(&control_center_ui.pause_button_text)
+                            .button(if simulation_settings.paused {
+                                "Play"
+                            } else {
+                                "Pause"
+                            })
                             .clicked()
                         {
                             toggle_pause_events.send(TogglePause);
@@ -228,8 +233,13 @@ pub fn display_control_center(
             });
             ui.collapsing("Save & Load", |collapsing_ui| {
                 Grid::new("save_and_load_grid").show(collapsing_ui, |grid_ui| {
+                    grid_ui.label("Save name: ");
+                    grid_ui.text_edit_singleline(&mut control_center_ui.save_name_text_edit);
+                    grid_ui.end_row();
                     if grid_ui.button("Save").clicked() {
-                        save_events.send(Save);
+                        save_events.send(Save {
+                            save_name: control_center_ui.save_name_text_edit.clone(),
+                        });
                     }
                     if grid_ui.button("Load").clicked() {
                         todo!();
