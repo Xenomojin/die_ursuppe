@@ -1,18 +1,23 @@
 use crate::{
     brain::Brain,
     ui::{
-        BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, StatisticData,
+        BrainSizeStatistic, CellCountStatistic, ChildCountStatistic, ControlCenterUi, Statistic,
+        StatisticData,
     },
 };
-use bevy::{ecs::schedule::ShouldRun, prelude::*, scene, time::Stopwatch};
+use bevy::{
+    ecs::{
+        entity::{EntityMap, MapEntities, MapEntitiesError},
+        reflect::ReflectMapEntities,
+        schedule::ShouldRun,
+    },
+    prelude::*,
+    scene,
+    time::Stopwatch,
+};
 use rand::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{f32::consts::PI, fs, path::Path};
-
-/// Größe der Chunks
-pub const CHUNK_SIZE: f32 = 50.;
-/// Map Größe in Chunks
-pub const MAP_SIZE: u32 = 40;
 
 /// Einstellungen für den Verlauf der Simulation
 #[derive(Resource, Serialize, Deserialize)]
@@ -30,7 +35,7 @@ pub struct SimulationSettings {
     /// Die estrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
     /// Ob die Simulation pausiert ist
-    pub paused: bool,
+    pub is_paused: bool,
 }
 
 // Setzt die Standartwerte für SimulationSettings
@@ -46,17 +51,50 @@ impl Default for SimulationSettings {
             rotation_speed_max: 1.,
             acceleration_max: 1.7,
             tick_delta_seconds: 0.02,
-            paused: true,
+            is_paused: true,
         }
     }
 }
 
-#[derive(Default, Resource, Deref, DerefMut, Serialize, Deserialize)]
-pub struct ChunkList(Vec<Vec<Entity>>);
+#[derive(Default, Component, Serialize, Deserialize, Reflect)]
+#[reflect(Component, MapEntities)]
+pub struct ChunkRegistry {
+    /// Größe der Chunks
+    pub chunk_size: f32,
+    /// Map Größe in Chunks
+    pub map_size: u32,
+    pub entries: Vec<Vec<Entity>>,
+}
 
-#[derive(Default, Debug, Component, Deref, DerefMut, Reflect)]
-#[reflect(Component)]
+impl MapEntities for ChunkRegistry {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        for index_x in 0..self.entries.len() {
+            for index_y in 0..self.entries[index_x].len() {
+                if let Ok(new_entity) =
+                    entity_map.get(Entity::from_raw(self.entries[index_x][index_y].index()))
+                {
+                    self.entries[index_x][index_y] = new_entity;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default, Component, Deref, DerefMut, Reflect)]
+#[reflect(Component, MapEntities)]
 pub struct Foodlist(Vec<Entity>);
+
+impl MapEntities for Foodlist {
+    fn map_entities(&mut self, entity_map: &EntityMap) -> Result<(), MapEntitiesError> {
+        for entity in &mut **self {
+            if let Ok(new_entity) = entity_map.get(Entity::from_raw(entity.index())) {
+                *entity = new_entity;
+            }
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Component, Reflect)]
 #[reflect(Component)]
@@ -149,22 +187,32 @@ pub struct ChunkBundle {
     pub chunk_settings: ChunkSettings,
 }
 
-pub fn setup_chunks(mut commands: Commands, mut chunk_list: ResMut<ChunkList>) {
-    for idx in 0..MAP_SIZE {
-        chunk_list.push(Vec::new());
-        for idy in 0..MAP_SIZE {
+pub fn setup_chunks(mut commands: Commands) {
+    let mut chunk_registry = ChunkRegistry {
+        chunk_size: 50.,
+        map_size: 40,
+        entries: Vec::new(),
+    };
+
+    for index in 0..chunk_registry.map_size {
+        chunk_registry.entries.push(Vec::new());
+        for idy in 0..chunk_registry.map_size {
             let chunk_entity = commands
                 .spawn(ChunkBundle {
                     position: Position {
-                        x: (idx as f32 * CHUNK_SIZE + CHUNK_SIZE / 2.),
-                        y: (idy as f32 * CHUNK_SIZE + CHUNK_SIZE / 2.),
+                        x: (index as f32 * chunk_registry.chunk_size
+                            + chunk_registry.chunk_size / 2.),
+                        y: (idy as f32 * chunk_registry.chunk_size
+                            + chunk_registry.chunk_size / 2.),
                     },
                     ..default()
                 })
                 .id();
-            chunk_list[idx as usize].push(chunk_entity);
+            chunk_registry.entries[index as usize].push(chunk_entity);
         }
     }
+
+    commands.spawn(chunk_registry);
 }
 
 pub fn tick_cells(
@@ -209,9 +257,11 @@ pub fn tick_cells(
         ),
     >,
     chunk_query: Query<(&Foodlist, &ChunkSettings), (With<Chunk>, Without<Cell>, Without<Food>)>,
-    chunk_list: Res<ChunkList>,
+    chunk_registry_query: Query<&ChunkRegistry>,
     simulation_settings: Res<SimulationSettings>,
 ) {
+    let chunk_registry = chunk_registry_query.single();
+
     // Statistik informationen deklarieren
     let mut cell_count = 0;
     let mut children_count_sum = 0;
@@ -227,27 +277,30 @@ pub fn tick_cells(
             connection_count += neuron.inputs.len();
         }
 
-        // Statistic informationen sammeln
+        // Statistik informationen sammeln
         cell_count += 1;
         children_count_sum += stats.child_count;
         neuron_count_sum += neuron_count;
         connection_count_sum += connection_count;
 
         // Chunk berechnen
-        let chunk_idx = (position.x / CHUNK_SIZE) as i32;
-        let chunk_idy = (position.y / CHUNK_SIZE) as i32;
+        let chunk_index = (position.x / chunk_registry.chunk_size) as i32;
+        let chunk_idy = (position.y / chunk_registry.chunk_size) as i32;
         let chunk_settings = chunk_query
-            .get_component::<ChunkSettings>(chunk_list[chunk_idx as usize][chunk_idy as usize])
+            .get_component::<ChunkSettings>(
+                chunk_registry.entries[chunk_index as usize][chunk_idy as usize],
+            )
             .unwrap();
 
         // Inputs berechnen und in input neuronen schreiben
         let mut chunk_entities = Vec::with_capacity(9);
         for jdx in -1..1 {
-            if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
+            if chunk_index + jdx >= 0 && chunk_index + jdx < chunk_registry.map_size as i32 {
                 for jdy in -1..1 {
-                    if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
+                    if chunk_idy + jdy >= 0 && chunk_idy + jdy < chunk_registry.map_size as i32 {
                         chunk_entities.push(
-                            chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
+                            chunk_registry.entries[(chunk_index + jdx) as usize]
+                                [(chunk_idy + jdy) as usize],
                         );
                     }
                 }
@@ -309,8 +362,8 @@ pub fn tick_cells(
         position.y += velocity.y;
         if position.x < 0.
             || position.y < 0.
-            || position.x >= (MAP_SIZE as f32 * CHUNK_SIZE) as f32
-            || position.y >= (MAP_SIZE as f32 * CHUNK_SIZE) as f32
+            || position.x >= (chunk_registry.map_size as f32 * chunk_registry.chunk_size) as f32
+            || position.y >= (chunk_registry.map_size as f32 * chunk_registry.chunk_size) as f32
         {
             **energy = 0.;
             continue;
@@ -328,11 +381,12 @@ pub fn tick_cells(
         // Tatsächliche kollisionen berechnen
         let mut chunk_entities = Vec::with_capacity(9);
         for jdx in -1..1 {
-            if chunk_idx + jdx >= 0 && chunk_idx + jdx < MAP_SIZE as i32 {
+            if chunk_index + jdx >= 0 && chunk_index + jdx < chunk_registry.map_size as i32 {
                 for jdy in -1..1 {
-                    if chunk_idy + jdy >= 0 && chunk_idy + jdy < MAP_SIZE as i32 {
+                    if chunk_idy + jdy >= 0 && chunk_idy + jdy < chunk_registry.map_size as i32 {
                         chunk_entities.push(
-                            chunk_list[(chunk_idx + jdx) as usize][(chunk_idy + jdy) as usize],
+                            chunk_registry.entries[(chunk_index + jdx) as usize]
+                                [(chunk_idy + jdy) as usize],
                         );
                     }
                 }
@@ -418,15 +472,18 @@ pub fn tick_cells(
 pub fn spawn_food(
     mut commands: Commands,
     mut chunk_query: Query<(&mut Foodlist, &ChunkSettings, &Position), With<Chunk>>,
+    chunk_registry_query: Query<&ChunkRegistry>,
 ) {
+    let chunk_registry = chunk_registry_query.single();
+
     for (mut foodlist, chunk_settings, chunk_position) in &mut chunk_query {
         let mut to_place = chunk_settings.spawn_chance;
         while to_place > 1. {
             let food_entity = commands
                 .spawn(FoodBundle {
                     position: Position {
-                        x: chunk_position.x + (random::<f32>() - 0.5) * CHUNK_SIZE,
-                        y: chunk_position.y + (random::<f32>() - 0.5) * CHUNK_SIZE,
+                        x: chunk_position.x + (random::<f32>() - 0.5) * chunk_registry.chunk_size,
+                        y: chunk_position.y + (random::<f32>() - 0.5) * chunk_registry.chunk_size,
                     },
                     energy: Energy(chunk_settings.spawned_food_energy),
                     ..default()
@@ -439,8 +496,8 @@ pub fn spawn_food(
             let food_entity = commands
                 .spawn(FoodBundle {
                     position: Position {
-                        x: chunk_position.x + (random::<f32>() - 0.5) * CHUNK_SIZE,
-                        y: chunk_position.y + (random::<f32>() - 0.5) * CHUNK_SIZE,
+                        x: chunk_position.x + (random::<f32>() - 0.5) * chunk_registry.chunk_size,
+                        y: chunk_position.y + (random::<f32>() - 0.5) * chunk_registry.chunk_size,
                     },
                     energy: Energy(chunk_settings.spawned_food_energy),
                     ..default()
@@ -486,7 +543,7 @@ pub fn run_on_tick(
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
-    if !simulation_settings.paused
+    if !simulation_settings.is_paused
         && tick_watch.tick(time.delta()).elapsed_secs() >= simulation_settings.tick_delta_seconds
     {
         control_center_ui.actual_tick_delta_seconds_label =
@@ -503,14 +560,19 @@ pub struct SpawnCell {
 }
 
 /// Event-Handler für `SpawnCell` events
-pub fn spawn_cells(mut commands: Commands, mut spawn_cell_events: EventReader<SpawnCell>) {
+pub fn spawn_cells(
+    mut commands: Commands,
+    mut spawn_cell_events: EventReader<SpawnCell>,
+    chunk_registry_query: Query<&ChunkRegistry>,
+) {
     for spawn_cell_event in spawn_cell_events.iter() {
+        let chunk_registry = chunk_registry_query.single();
         let mut brain = Brain::new();
         brain.mutate();
         commands.spawn(CellBundle {
             position: Position {
-                x: random::<f32>() * MAP_SIZE as f32 * CHUNK_SIZE,
-                y: random::<f32>() * MAP_SIZE as f32 * CHUNK_SIZE,
+                x: random::<f32>() * chunk_registry.map_size as f32 * chunk_registry.chunk_size,
+                y: random::<f32>() * chunk_registry.map_size as f32 * chunk_registry.chunk_size,
             },
             rotation: Rotation(random::<f32>() * 2. * PI),
             energy: Energy(spawn_cell_event.energy),
@@ -520,27 +582,46 @@ pub fn spawn_cells(mut commands: Commands, mut spawn_cell_events: EventReader<Sp
     }
 }
 
-pub struct Clear;
+pub struct Clear {
+    pub clear_food: bool,
+    pub clear_cells: bool,
+    pub clear_statistics: bool,
+}
 
 /// Event-Handler für `Clear` Event
 pub fn clear(
     mut commands: Commands,
     mut clear_events: EventReader<Clear>,
-    entities_to_clear_query: Query<Entity, Or<(With<Cell>, With<Food>)>>,
+    mut statistic_query: Query<&mut StatisticData, With<Statistic>>,
+    food_query: Query<Entity, With<Food>>,
+    cell_query: Query<Entity, With<Cell>>,
 ) {
-    for _ in clear_events.iter() {
-        for entity in &entities_to_clear_query {
-            commands.entity(entity).despawn();
+    for clear_event in clear_events.iter() {
+        if clear_event.clear_food {
+            for entity in &food_query {
+                commands.entity(entity).despawn();
+            }
+        }
+        if clear_event.clear_cells {
+            for entity in &cell_query {
+                commands.entity(entity).despawn();
+            }
+        }
+        if clear_event.clear_statistics {
+            for mut statistic_data in &mut statistic_query {
+                *statistic_data = default();
+            }
         }
     }
 }
 
 pub struct ApplyChunkSettings;
 
-/// Event-Handler für `Clear` Event
+/// Event-Handler für `ApplyChunkSettings` Event
 pub fn apply_chunk_settings(
     mut chunk_query: Query<(&mut ChunkSettings, &Position), With<Chunk>>,
     mut apply_chunk_settings_events: EventReader<ApplyChunkSettings>,
+    chunk_registry_query: Query<&ChunkRegistry>,
     control_center_ui: Res<ControlCenterUi>,
 ) {
     let spawn_chance_left = control_center_ui.food_spawn_chance_slider_left;
@@ -548,16 +629,18 @@ pub fn apply_chunk_settings(
     let velocity_damping_bottom = control_center_ui.velocity_damping_slider_bottom;
     let velocity_damping_top = control_center_ui.velocity_damping_slider_top;
     for _ in apply_chunk_settings_events.iter() {
+        let chunk_registry = chunk_registry_query.single();
         for (mut chunk_settings, chunk_position) in &mut chunk_query {
-            let chunk_idx = (chunk_position.x / CHUNK_SIZE) as f32;
-            let chunk_idy = (chunk_position.y / CHUNK_SIZE) as f32;
+            let chunk_index = (chunk_position.x / chunk_registry.chunk_size) as f32;
+            let chunk_idy = (chunk_position.y / chunk_registry.chunk_size) as f32;
             *chunk_settings = ChunkSettings {
                 spawn_chance: spawn_chance_left
-                    + (spawn_chance_right - spawn_chance_left) * chunk_idx / MAP_SIZE as f32,
+                    + (spawn_chance_right - spawn_chance_left) * chunk_index
+                        / chunk_registry.map_size as f32,
                 spawned_food_energy: control_center_ui.food_energy_drag_value,
                 velocity_damping: velocity_damping_bottom
                     + (velocity_damping_top - velocity_damping_bottom) * chunk_idy
-                        / MAP_SIZE as f32,
+                        / chunk_registry.map_size as f32,
             };
         }
     }
@@ -582,7 +665,7 @@ pub fn apply_simulation_settings(
             energy_required_for_split: control_center_ui.energy_required_for_split_drag_value,
             rotation_speed_max: control_center_ui.rotation_speed_max_drag_value,
             acceleration_max: control_center_ui.acceleration_max_drag_value,
-            paused: simulation_settings.paused,
+            is_paused: simulation_settings.is_paused,
         };
     }
 }
@@ -595,7 +678,7 @@ pub fn toggle_pause(
     mut toggle_pause_events: EventReader<TogglePause>,
 ) {
     for _ in toggle_pause_events.iter() {
-        simulation_settings.paused = !simulation_settings.paused;
+        simulation_settings.is_paused = !simulation_settings.is_paused;
     }
 }
 
@@ -608,18 +691,17 @@ pub fn save(
     mut save_events: EventReader<Save>,
     world: &World,
     simulation_settings: Res<SimulationSettings>,
-    chunk_list: Res<ChunkList>,
 ) {
     for save_event in save_events.iter() {
         // Ordner erstellen
-        fs::create_dir(Path::new(&save_event.save_name)).unwrap();
+        fs::create_dir_all(Path::new(&format!("assets/{}", &save_event.save_name))).unwrap();
 
         // Scene speichern
         let type_registry = world.resource::<AppTypeRegistry>();
         let scene = DynamicScene::from_world(world, type_registry);
         let serialized_scene = scene.serialize_ron(type_registry).unwrap();
         fs::write(
-            Path::new(&format!("{}/scene.ron", &save_event.save_name)),
+            Path::new(&format!("assets/{}/scene.scn.ron", &save_event.save_name)),
             serialized_scene,
         )
         .unwrap();
@@ -628,19 +710,50 @@ pub fn save(
         let serialized_simulation_settings = scene::serialize_ron(&*simulation_settings).unwrap();
         fs::write(
             Path::new(&format!(
-                "{}/simulation_settings.ron",
+                "assets/{}/simulation_settings.ron",
                 &save_event.save_name
             )),
             serialized_simulation_settings,
         )
         .unwrap();
+    }
+}
 
-        // Chunk list speichern
-        let serialized_chunk_list = scene::serialize_ron(&*chunk_list).unwrap();
-        fs::write(
-            Path::new(&format!("{}/chunk_list.ron", &save_event.save_name)),
-            serialized_chunk_list,
-        )
+pub struct Load {
+    pub save_name: String,
+}
+
+/// Event-Handler für `Load` Event
+pub fn load(
+    mut commands: Commands,
+    mut load_events: EventReader<Load>,
+    mut simulation_settings: ResMut<SimulationSettings>,
+    entity_query: Query<Entity>,
+    asset_server: Res<AssetServer>,
+) {
+    for load_event in load_events.iter() {
+        // Alle bestehenden entities despawnen
+        for entity in &entity_query {
+            commands.entity(entity).despawn();
+        }
+
+        // Scene laden
+        commands.spawn(DynamicSceneBundle {
+            scene: asset_server.load(Path::new(&format!(
+                "{}/scene.scn.ron",
+                &load_event.save_name
+            ))),
+            ..default()
+        });
+
+        // Simulation settings laden
+        let serialized_simulation_settings = fs::read_to_string(Path::new(&format!(
+            "assets/{}/simulation_settings.ron",
+            &load_event.save_name
+        )))
         .unwrap();
+        *simulation_settings = ron::from_str(&serialized_simulation_settings).unwrap();
+        // Simulation pausieren um zu verhindern, dass in diesem Frame noch ein Tick durchgeführt wird
+        simulation_settings.is_paused = true;
     }
 }

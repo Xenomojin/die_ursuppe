@@ -1,7 +1,7 @@
 use crate::brain::Brain;
 use crate::sim::{
-    ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Clear, Energy, Food, Position,
-    Save, SimulationSettings, SpawnCell, TogglePause,
+    ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Clear, Energy, Food, Load,
+    Position, Save, SimulationSettings, SpawnCell, TogglePause,
 };
 use bevy::prelude::*;
 use bevy_egui::{
@@ -35,6 +35,9 @@ pub struct ControlCenterUi {
     pub velocity_damping_slider_top: f32,
     /// Wert zwischen 0 (kein damping) und 1 (100% damping)
     pub velocity_damping_slider_bottom: f32,
+    pub clear_food_checkbox: bool,
+    pub clear_cells_checkbox: bool,
+    pub clear_statistics_checkbox: bool,
     pub save_name_text_edit: String,
 }
 
@@ -58,6 +61,9 @@ impl Default for ControlCenterUi {
             food_energy_drag_value: 200.,
             food_spawn_chance_slider_left: 0.018,
             food_spawn_chance_slider_right: 0.018,
+            clear_food_checkbox: true,
+            clear_cells_checkbox: true,
+            clear_statistics_checkbox: false,
             save_name_text_edit: "save".to_string(),
         }
     }
@@ -72,6 +78,7 @@ pub fn display_control_center(
     mut toggle_pause_events: EventWriter<TogglePause>,
     mut clear_events: EventWriter<Clear>,
     mut save_events: EventWriter<Save>,
+    mut load_events: EventWriter<Load>,
     mut statistic_query: Query<(&Label, &mut IsOpen), With<Statistic>>,
     simulation_settings: Res<SimulationSettings>,
 ) {
@@ -149,7 +156,7 @@ pub fn display_control_center(
                             apply_simulation_settings_events.send(ApplySimulationSettings);
                         }
                         if cell_ui
-                            .button(if simulation_settings.paused {
+                            .button(if simulation_settings.is_paused {
                                 "Play"
                             } else {
                                 "Pause"
@@ -227,8 +234,18 @@ pub fn display_control_center(
                 });
             });
             ui.collapsing("Destroy", |collapsing_ui| {
+                collapsing_ui.checkbox(&mut control_center_ui.clear_food_checkbox, "Clear food");
+                collapsing_ui.checkbox(&mut control_center_ui.clear_cells_checkbox, "Clear cells");
+                collapsing_ui.checkbox(
+                    &mut control_center_ui.clear_statistics_checkbox,
+                    "Clear statistics",
+                );
                 if collapsing_ui.button("Clear").clicked() {
-                    clear_events.send(Clear);
+                    clear_events.send(Clear {
+                        clear_food: control_center_ui.clear_food_checkbox,
+                        clear_cells: control_center_ui.clear_cells_checkbox,
+                        clear_statistics: control_center_ui.clear_statistics_checkbox,
+                    });
                 }
             });
             ui.collapsing("Save & Load", |collapsing_ui| {
@@ -242,7 +259,9 @@ pub fn display_control_center(
                         });
                     }
                     if grid_ui.button("Load").clicked() {
-                        todo!();
+                        load_events.send(Load {
+                            save_name: control_center_ui.save_name_text_edit.clone(),
+                        });
                     }
                     grid_ui.end_row();
                 });
@@ -325,12 +344,12 @@ pub fn display_simulation(
                 }
 
                 // Cells zeichnen
-                for idx in 0..cell_point_groups.len() {
+                for index in 0..cell_point_groups.len() {
                     plot_ui.points(
-                        Points::new(PlotPoints::new(cell_point_groups[idx].clone()))
+                        Points::new(PlotPoints::new(cell_point_groups[index].clone()))
                             .radius(simulation_settings.cell_radius)
-                            .color(group_colors[idx])
-                            .name(group_labels[idx]),
+                            .color(group_colors[index])
+                            .name(group_labels[index]),
                     );
                 }
 
@@ -537,17 +556,17 @@ pub fn display_cell_inspector(
                 .show(ui, |plot_ui| {
                     // Neuronen daten sammeln
                     let mut neuron_positons = Vec::new();
-                    for idx in 0..brain.neurons().len() {
-                        neuron_positons.push([(idx % 4) as f64, (idx / 4) as f64]);
+                    for index in 0..brain.neurons().len() {
+                        neuron_positons.push([(index % 4) as f64, (index / 4) as f64]);
                     }
 
                     // Connection daten sammeln
                     let mut connection_position_origins = Vec::new();
                     let mut connection_position_tips = Vec::new();
                     let mut connection_weights = Vec::new();
-                    for (idx, neuron) in brain.neurons().iter().enumerate() {
+                    for (index, neuron) in brain.neurons().iter().enumerate() {
                         for input in &neuron.inputs {
-                            connection_position_origins.push(neuron_positons[idx]);
+                            connection_position_origins.push(neuron_positons[index]);
                             connection_position_tips.push(neuron_positons[input.neuron_index]);
                             connection_weights.push(input.weight);
                         }
@@ -562,20 +581,20 @@ pub fn display_cell_inspector(
                     );
 
                     // Connections zeichnen
-                    for idx in 0..connection_position_origins.len() {
+                    for index in 0..connection_position_origins.len() {
                         plot_ui.line(
                             Line::new(vec![
-                                connection_position_origins[idx],
-                                connection_position_tips[idx],
+                                connection_position_origins[index],
+                                connection_position_tips[index],
                             ])
-                            .width(connection_weights[idx].abs() * 2.)
-                            .color(if connection_weights[idx].is_sign_positive() {
+                            .width(connection_weights[index].abs() * 2.)
+                            .color(if connection_weights[index].is_sign_positive() {
                                 Rgba::from_rgb(0.145, 0.569, 0.129)
                             } else {
                                 Rgba::from_rgb(0.569, 0.129, 0.145)
                             })
                             .name(
-                                if connection_weights[idx].is_sign_positive() {
+                                if connection_weights[index].is_sign_positive() {
                                     "Positive connection"
                                 } else {
                                     "Negative connection"

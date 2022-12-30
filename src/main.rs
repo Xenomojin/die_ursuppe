@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
 use brain::{Brain, Neuron, NeuronInput};
 use sim::{
-    ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Chunk, ChunkList, ChunkSettings,
-    Clear, Energy, Food, Foodlist, Position, Rotation, Save, SimulationSettings, SpawnCell,
-    TogglePause, Velocity,
+    ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Chunk, ChunkRegistry,
+    ChunkSettings, Clear, Energy, Food, Foodlist, Load, Position, Rotation, Save,
+    SimulationSettings, SpawnCell, TogglePause, Velocity,
 };
 use ui::{
     BrainSizeStatistic, CellCountStatistic, CellInspectorUi, ChildCountStatistic, ControlCenterUi,
@@ -32,7 +32,12 @@ fn main() {
         .add_event::<TogglePause>()
         .add_event::<ApplyChunkSettings>()
         .add_event::<Save>()
+        .add_event::<Load>()
         // Register components
+        .register_type::<[f32; 3]>()
+        .register_type::<Vec<f32>>()
+        .register_type::<Vec<Vec<Entity>>>()
+        .register_type::<ChunkRegistry>()
         .register_type::<Foodlist>()
         .register_type::<ChunkSettings>()
         .register_type::<Position>()
@@ -41,11 +46,14 @@ fn main() {
         .register_type::<Energy>()
         .register_type::<CellStats>()
         .register_type::<Brain>()
+        .register_type::<Vec<Neuron>>()
         .register_type::<Neuron>()
+        .register_type::<Vec<NeuronInput>>()
         .register_type::<NeuronInput>()
         .register_type::<Label>()
         .register_type::<IsOpen>()
         .register_type::<StatisticData>()
+        .register_type::<Vec<StatisticLine>>()
         .register_type::<StatisticLine>()
         .register_type::<Cell>()
         .register_type::<Food>()
@@ -56,7 +64,6 @@ fn main() {
         .register_type::<BrainSizeStatistic>()
         // Init ressources
         .init_resource::<SimulationSettings>()
-        .init_resource::<ChunkList>()
         .init_resource::<ControlCenterUi>()
         .init_resource::<CellInspectorUi>()
         // Setup
@@ -74,6 +81,7 @@ fn main() {
         .add_system(sim::toggle_pause)
         .add_system(sim::clear)
         .add_system(sim::save)
+        .add_system(sim::load)
         // Simulation Systeme, die an Tick beteiligt sind
         .add_system_set(
             SystemSet::new()
