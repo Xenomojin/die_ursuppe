@@ -7,7 +7,7 @@ const NEURON_FUNCTION: fn(f32) -> i8 = |x| (2.22 * x - 1.11).powi(15) as i8;
 const CONNECTION_FUNCTION: fn(f32) -> i8 = |x| (2.38 * x - 1.19).powi(7) as i8;
 const ACTIVATION_FUNCTION: fn(f32) -> f32 = |x| x.tanh();
 /// Summe der [Neuron]s die als input verwendet werden und [Neuron]s die als output verwendet werden.
-const IMMUNE_NEURON_COUNT: u8 = 8;
+pub const IMMUNE_NEURON_COUNT: u8 = 8;
 
 #[derive(Default, Debug, Clone, Component, Reflect)]
 #[reflect(Component)]

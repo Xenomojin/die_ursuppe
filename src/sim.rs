@@ -340,8 +340,8 @@ pub fn tick_cells(
         let nearest_food_angle = nearest_food_position.y.atan2(nearest_food_position.x);
         let nearest_food_relative_angle = nearest_food_angle - **rotation;
         brain.write_neuron(0, nearest_food_relative_angle);
-        brain.write_neuron(1, stats.age as f32);
-        brain.write_neuron(2, nearest_food_distance_squared);
+        brain.write_neuron(1, nearest_food_distance_squared);
+        brain.write_neuron(2, stats.age as f32);
         brain.write_neuron(3, **energy as f32);
         brain.write_neuron(4, (stats.age as f32 * 0.1).sin());
 

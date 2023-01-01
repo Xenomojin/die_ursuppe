@@ -1,9 +1,10 @@
-use crate::brain::Brain;
+use crate::brain::{Brain, IMMUNE_NEURON_COUNT};
 use crate::sim::{
     ApplyChunkSettings, ApplySimulationSettings, Cell, CellStats, Clear, Energy, Food, Load,
     Position, Save, SimulationSettings, SpawnCell, TogglePause,
 };
 use bevy::prelude::*;
+use bevy_egui::egui::plot::Text;
 use bevy_egui::{
     egui::{
         plot::{Line, Plot, PlotPoints, Points},
@@ -560,12 +561,47 @@ pub fn display_cell_inspector(
             });
             Plot::new("brain_plot")
                 .data_aspect(1.)
+                .view_aspect(1.)
                 .legend(default())
                 .show(ui, |plot_ui| {
+                    let input_neuron_names = [
+                        "Nearest food angle",
+                        "Nearest food distance",
+                        "Age",
+                        "Energy",
+                        "Oscillator",
+                    ];
+                    let output_neuron_names = ["Rotation", "Acceleration", "Child wish"];
+                    assert_eq!(
+                        (input_neuron_names.len() + output_neuron_names.len()) as u8,
+                        IMMUNE_NEURON_COUNT
+                    );
+
                     // Neuronen daten sammeln
                     let mut neuron_positons = Vec::new();
                     for index in 0..brain.neurons().len() {
-                        neuron_positons.push([(index % 4) as f64, (index / 4) as f64]);
+                        let local_index;
+                        let local_len;
+                        let pos_x;
+                        let pos_y;
+                        if index < input_neuron_names.len() {
+                            local_index = index;
+                            local_len = input_neuron_names.len();
+                            pos_y = 1.;
+                        } else if index < input_neuron_names.len() + output_neuron_names.len() {
+                            local_index = index - input_neuron_names.len();
+                            local_len = output_neuron_names.len();
+                            pos_y = -1.;
+                        } else {
+                            local_index =
+                                index - input_neuron_names.len() - output_neuron_names.len();
+                            local_len = brain.neurons().len()
+                                - input_neuron_names.len()
+                                - output_neuron_names.len();
+                            pos_y = 0.;
+                        }
+                        pos_x = local_index as f64 - local_len as f64 / 2. + 0.5;
+                        neuron_positons.push([pos_x, pos_y + (index as f64 * 2.5).sin() * 0.25]);
                     }
 
                     // Connection daten sammeln
@@ -582,11 +618,48 @@ pub fn display_cell_inspector(
 
                     // Neuronen zeichnen
                     plot_ui.points(
-                        Points::new(PlotPoints::new(neuron_positons))
-                            .radius(8.)
-                            .color(Rgba::from_rgb(0.129, 0.145, 0.569))
-                            .name("Neuron"),
+                        Points::new(PlotPoints::new(
+                            neuron_positons[0..input_neuron_names.len()].to_vec(),
+                        ))
+                        .radius(8.)
+                        .color(Rgba::from_rgb(0.129, 0.145, 0.569))
+                        .name("Input neuron"),
                     );
+                    plot_ui.points(
+                        Points::new(PlotPoints::new(
+                            neuron_positons[input_neuron_names.len()
+                                ..(input_neuron_names.len() + output_neuron_names.len())]
+                                .to_vec(),
+                        ))
+                        .radius(8.)
+                        .color(Rgba::from_rgb(0.129, 0.145, 0.569))
+                        .name("Output neuron"),
+                    );
+                    plot_ui.points(
+                        Points::new(PlotPoints::new(
+                            neuron_positons
+                                [(input_neuron_names.len() + output_neuron_names.len())..]
+                                .to_vec(),
+                        ))
+                        .radius(8.)
+                        .color(Rgba::from_rgb(0.129, 0.145, 0.569))
+                        .name("Hidden neuron"),
+                    );
+
+                    for (index, name) in input_neuron_names.iter().enumerate() {
+                        let mut position = neuron_positons[index];
+                        position[1] -= 0.08;
+                        plot_ui.text(
+                            Text::new(position.into(), *name).color(Rgba::from_rgb(0.9, 0.9, 1.)),
+                        );
+                    }
+                    for (index, name) in output_neuron_names.iter().enumerate() {
+                        let mut position = neuron_positons[index + input_neuron_names.len()];
+                        position[1] -= 0.08;
+                        plot_ui.text(
+                            Text::new(position.into(), *name).color(Rgba::from_rgb(0.9, 0.9, 1.)),
+                        );
+                    }
 
                     // Connections zeichnen
                     for index in 0..connection_position_origins.len() {
@@ -594,6 +667,60 @@ pub fn display_cell_inspector(
                             Line::new(vec![
                                 connection_position_origins[index],
                                 connection_position_tips[index],
+                            ])
+                            .width(connection_weights[index].abs() * 2.)
+                            .color(if connection_weights[index].is_sign_positive() {
+                                Rgba::from_rgb(0.145, 0.569, 0.129)
+                            } else {
+                                Rgba::from_rgb(0.569, 0.129, 0.145)
+                            })
+                            .name(
+                                if connection_weights[index].is_sign_positive() {
+                                    "Positive connection"
+                                } else {
+                                    "Negative connection"
+                                },
+                            ),
+                        );
+                        let arrow_inversed_direction = [
+                            connection_position_origins[index][0]
+                                - connection_position_tips[index][0],
+                            connection_position_origins[index][1]
+                                - connection_position_tips[index][1],
+                        ];
+                        let tip_angle =
+                            arrow_inversed_direction[1].atan2(arrow_inversed_direction[0]) + 0.4;
+                        plot_ui.line(
+                            Line::new(vec![
+                                connection_position_tips[index],
+                                [
+                                    connection_position_tips[index][0] + tip_angle.cos() * 0.1,
+                                    connection_position_tips[index][1] + tip_angle.sin() * 0.1,
+                                ],
+                            ])
+                            .width(connection_weights[index].abs() * 2.)
+                            .color(if connection_weights[index].is_sign_positive() {
+                                Rgba::from_rgb(0.145, 0.569, 0.129)
+                            } else {
+                                Rgba::from_rgb(0.569, 0.129, 0.145)
+                            })
+                            .name(
+                                if connection_weights[index].is_sign_positive() {
+                                    "Positive connection"
+                                } else {
+                                    "Negative connection"
+                                },
+                            ),
+                        );
+                        let tip_angle =
+                            arrow_inversed_direction[1].atan2(arrow_inversed_direction[0]) - 0.4;
+                        plot_ui.line(
+                            Line::new(vec![
+                                connection_position_tips[index],
+                                [
+                                    connection_position_tips[index][0] + tip_angle.cos() * 0.1,
+                                    connection_position_tips[index][1] + tip_angle.sin() * 0.1,
+                                ],
                             ])
                             .width(connection_weights[index].abs() * 2.)
                             .color(if connection_weights[index].is_sign_positive() {
