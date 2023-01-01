@@ -34,6 +34,7 @@ pub struct SimulationSettings {
     pub acceleration_max: f32,
     /// Die estrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
+    pub child_cooldown: u32,
     /// Ob die Simulation pausiert ist
     pub is_paused: bool,
 }
@@ -51,6 +52,7 @@ impl Default for SimulationSettings {
             rotation_speed_max: 1.,
             acceleration_max: 1.7,
             tick_delta_seconds: 0.02,
+            child_cooldown: 10,
             is_paused: true,
         }
     }
@@ -142,6 +144,10 @@ pub struct Velocity {
 #[reflect(Component)]
 pub struct Energy(pub f32);
 
+#[derive(Default, Debug, Component, Deref, DerefMut, Reflect)]
+#[reflect(Component)]
+pub struct ChildCooldown(pub u32);
+
 #[derive(Default, Debug, Component, Reflect)]
 #[reflect(Component)]
 pub struct CellStats {
@@ -169,6 +175,7 @@ pub struct CellBundle {
     pub rotation: Rotation,
     pub velocity: Velocity,
     pub energy: Energy,
+    pub child_cooldown: ChildCooldown,
     pub stats: CellStats,
 }
 
@@ -224,6 +231,7 @@ pub fn tick_cells(
             &mut Rotation,
             &mut Velocity,
             &mut Energy,
+            &mut ChildCooldown,
             &mut CellStats,
         ),
         (With<Cell>, Without<Food>, Without<Chunk>),
@@ -268,8 +276,15 @@ pub fn tick_cells(
     let mut cells_born = 0;
     let mut neuron_count_sum = 0;
     let mut connection_count_sum = 0;
-    for (mut brain, mut position, mut rotation, mut velocity, mut energy, mut stats) in
-        &mut cell_query
+    for (
+        mut brain,
+        mut position,
+        mut rotation,
+        mut velocity,
+        mut energy,
+        mut child_cooldown,
+        mut stats,
+    ) in &mut cell_query
     {
         let neuron_count = brain.neurons().len();
         let mut connection_count = 0;
@@ -412,10 +427,13 @@ pub fn tick_cells(
         // Kind spawnen
         if want_child_neuron_output.is_sign_positive()
             && **energy > simulation_settings.energy_required_for_split
+            && **child_cooldown == 0
         {
             // Update stats
             cells_born += 1;
             stats.child_count += 1;
+
+            **child_cooldown = simulation_settings.child_cooldown;
 
             // Child-Brain erstellen
             let mut child_brain = brain.clone();
@@ -441,6 +459,9 @@ pub fn tick_cells(
             + neuron_count as f32 * simulation_settings.neuron_energy_drain
             + connection_count as f32 * simulation_settings.connection_energy_drain;
         stats.age += 1;
+        if **child_cooldown > 0 {
+            **child_cooldown -= 1;
+        }
     }
 
     // Statistiken schreiben
@@ -663,6 +684,7 @@ pub fn apply_simulation_settings(
             neuron_energy_drain: control_center_ui.neuron_energy_drain_drag_value,
             connection_energy_drain: control_center_ui.connection_energy_drain_drag_value,
             energy_required_for_split: control_center_ui.energy_required_for_split_drag_value,
+            child_cooldown: control_center_ui.child_cooldown_drag_value,
             rotation_speed_max: control_center_ui.rotation_speed_max_drag_value,
             acceleration_max: control_center_ui.acceleration_max_drag_value,
             is_paused: simulation_settings.is_paused,

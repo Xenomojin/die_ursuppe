@@ -22,6 +22,7 @@ pub struct ControlCenterUi {
     pub neuron_energy_drain_drag_value: f32,
     pub connection_energy_drain_drag_value: f32,
     pub energy_required_for_split_drag_value: f32,
+    pub child_cooldown_drag_value: u32,
     pub rotation_speed_max_drag_value: f32,
     pub acceleration_max_drag_value: f32,
     /// Start Energy-Wert für zukünftige manuell gespawnte cells
@@ -52,6 +53,7 @@ impl Default for ControlCenterUi {
             neuron_energy_drain_drag_value: 0.01,
             connection_energy_drain_drag_value: 0.004,
             energy_required_for_split_drag_value: 10.,
+            child_cooldown_drag_value: 10,
             rotation_speed_max_drag_value: 1.,
             acceleration_max_drag_value: 1.7,
             cell_energy_drag_value: 199.,
@@ -126,6 +128,12 @@ pub fn display_control_center(
                         DragValue::new(&mut control_center_ui.energy_required_for_split_drag_value)
                             .speed(0.1),
                     );
+                    grid_ui.end_row();
+                    grid_ui.label("Child cooldown: ");
+                    grid_ui.add(Slider::new(
+                        &mut control_center_ui.child_cooldown_drag_value,
+                        0..=50,
+                    ));
                     grid_ui.end_row();
                     grid_ui.label("Rotation speed max.: ");
                     grid_ui.add(
