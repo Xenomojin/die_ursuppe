@@ -610,8 +610,8 @@ pub fn display_cell_inspector(
                     let mut connection_weights = Vec::new();
                     for (index, neuron) in brain.neurons().iter().enumerate() {
                         for input in &neuron.inputs {
-                            connection_position_origins.push(neuron_positons[index]);
-                            connection_position_tips.push(neuron_positons[input.neuron_index]);
+                            connection_position_origins.push(neuron_positons[input.neuron_index]);
+                            connection_position_tips.push(neuron_positons[index]);
                             connection_weights.push(input.weight);
                         }
                     }
