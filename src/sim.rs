@@ -630,7 +630,9 @@ pub fn clear(
         }
         if clear_event.clear_statistics {
             for mut statistic_data in &mut statistic_query {
-                *statistic_data = default();
+                for mut statistic_line in &mut statistic_data.lines {
+                    statistic_line.data_points = Vec::new();
+                }
             }
         }
     }
