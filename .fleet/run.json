@@ -17,8 +17,18 @@
         },
         {
             "type": "cargo",
-            "name": "clean",
+            "name": "clean project",
             "cargoArgs": [ "clean" ],
+        },
+        {
+            "type": "cargo",
+            "name": "run tests",
+            "cargoArgs": [ "test" ],
+        },
+        {
+            "type": "cargo",
+            "name": "run tests dynamic (linux only)",
+            "cargoArgs": [ "test", "--features", "bevy/dynamic" ],
         },
     ]
 }

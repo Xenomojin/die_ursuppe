@@ -22,9 +22,9 @@ use std::{f32::consts::PI, fs, path::Path};
 /// Einstellungen für den Verlauf der Simulation
 #[derive(Resource, Serialize, Deserialize)]
 pub struct SimulationSettings {
-    /// Raduis einer Zelle
+    /// Radius einer Zelle
     pub cell_radius: f32,
-    /// Raduis eines Foods
+    /// Radius von Nahrung
     pub food_radius: f32,
     pub base_energy_drain: f32,
     pub neuron_energy_drain: f32,
@@ -32,14 +32,14 @@ pub struct SimulationSettings {
     pub energy_required_for_split: f32,
     pub rotation_speed_max: f32,
     pub acceleration_max: f32,
-    /// Die estrebte Dauer in Sekunden zwischen Ticks
+    /// Die angestrebte Dauer in Sekunden zwischen Ticks
     pub tick_delta_seconds: f32,
     pub child_cooldown: u32,
     /// Ob die Simulation pausiert ist
     pub is_paused: bool,
 }
 
-// Setzt die Standartwerte für SimulationSettings
+// Setzt die Standartwerte für Simulation-Settings
 impl Default for SimulationSettings {
     fn default() -> Self {
         Self {
@@ -195,12 +195,14 @@ pub struct ChunkBundle {
 }
 
 pub fn setup_chunks(mut commands: Commands) {
+    // Neues Chunk-Registry erstellen
     let mut chunk_registry = ChunkRegistry {
         chunk_size: 50.,
         map_size: 40,
         entries: Vec::new(),
     };
 
+    // Neue Chunks erzeugen und Referenz im Chunk-Registry speichern
     for index in 0..chunk_registry.map_size {
         chunk_registry.entries.push(Vec::new());
         for idy in 0..chunk_registry.map_size {
@@ -219,6 +221,7 @@ pub fn setup_chunks(mut commands: Commands) {
         }
     }
 
+    // Chunk-Registry zu Welt hinzufügen
     commands.spawn(chunk_registry);
 }
 
@@ -270,7 +273,7 @@ pub fn tick_cells(
 ) {
     let chunk_registry = chunk_registry_query.single();
 
-    // Statistik informationen deklarieren
+    // Statistik Informationen deklarieren
     let mut cell_count = 0;
     let mut children_count_sum = 0;
     let mut cells_born = 0;
@@ -292,7 +295,7 @@ pub fn tick_cells(
             connection_count += neuron.inputs.len();
         }
 
-        // Statistik informationen sammeln
+        // Statistik Informationen sammeln
         cell_count += 1;
         children_count_sum += stats.child_count;
         neuron_count_sum += neuron_count;
@@ -307,7 +310,7 @@ pub fn tick_cells(
             )
             .unwrap();
 
-        // Inputs berechnen und in input neuronen schreiben
+        // Inputs berechnen und in Input-Neuronen schreiben
         let mut chunk_entities = Vec::with_capacity(9);
         for jdx in -1..1 {
             if chunk_index + jdx >= 0 && chunk_index + jdx < chunk_registry.map_size as i32 {
@@ -348,12 +351,12 @@ pub fn tick_cells(
         // Brain rechnen lassen
         brain.tick();
 
-        // Output neuronen auslesen
+        // Output-Neuronen auslesen
         let rotation_neuron_output = brain.read_neuron(5).unwrap();
         let acceleration_neuron_output = brain.read_neuron(6).unwrap();
         let want_child_neuron_output = brain.read_neuron(7).unwrap();
 
-        // Rotieren und geschwindigkeit passend verändern
+        // Rotieren und Geschwindigkeit passend verändern
         **rotation += rotation_neuron_output * simulation_settings.rotation_speed_max;
         let new_velocity = Velocity {
             x: velocity.x
@@ -366,12 +369,12 @@ pub fn tick_cells(
                     * simulation_settings.acceleration_max,
         };
 
-        // Kinetische energie berechnen und von energie abziehen
+        // Kinetische Energie berechnen und von Energie abziehen
         let kinetic_energy = velocity.x * velocity.x + velocity.y * velocity.y;
         let new_kinetic_energy = new_velocity.x * new_velocity.x + new_velocity.y * new_velocity.y;
         **energy -= (new_kinetic_energy - kinetic_energy).abs();
 
-        // Geschwindikeit und position berechen
+        // Geschwindikeit und Position berechen
         *velocity = new_velocity;
         position.x += velocity.x;
         position.y += velocity.y;
@@ -388,12 +391,12 @@ pub fn tick_cells(
 
         // Essen einsammeln
 
-        // Benötigte distanz berechen (squared um sqrt(x) zu vermeiden)
+        // Benötigte Distanz berechen (squared um sqrt(x) zu vermeiden)
         let distance_min_squared = (simulation_settings.cell_radius
             + simulation_settings.food_radius)
             * (simulation_settings.cell_radius + simulation_settings.food_radius);
 
-        // Tatsächliche kollisionen berechnen
+        // Tatsächliche Kollisionen berechnen
         let mut chunk_entities = Vec::with_capacity(9);
         for jdx in -1..1 {
             if chunk_index + jdx >= 0 && chunk_index + jdx < chunk_registry.map_size as i32 {
@@ -424,12 +427,12 @@ pub fn tick_cells(
             }
         }
 
-        // Kind spawnen
+        // Kind erzeugen
         if want_child_neuron_output.is_sign_positive()
             && **energy > simulation_settings.energy_required_for_split
             && **child_cooldown == 0
         {
-            // Update stats
+            // Stats aktualisieren
             cells_born += 1;
             stats.child_count += 1;
 
@@ -439,11 +442,11 @@ pub fn tick_cells(
             let mut child_brain = brain.clone();
             child_brain.mutate();
 
-            // Neu Energiewerte berechnen
+            // Neuen Energiewerte berechnen
             let new_energy = **energy / 2.;
             **energy = new_energy;
 
-            // Spawn child
+            // Kind in Welt spawnen
             commands.spawn(CellBundle {
                 position: Position {
                     x: position.x,
@@ -530,7 +533,7 @@ pub fn spawn_food(
 }
 
 pub fn despawn_food(mut commands: Commands, food_query: Query<(Entity, &Energy), With<Food>>) {
-    // Essen ohne energie löschen
+    // Essen ohne Energie löschen
     for (entity, energy) in &food_query {
         if **energy <= 0. {
             commands.entity(entity).despawn();
@@ -543,7 +546,7 @@ pub fn despawn_cells(
     mut cell_count_statistic_query: Query<&mut StatisticData, With<CellCountStatistic>>,
     cell_query: Query<(Entity, &Energy), With<Cell>>,
 ) {
-    // Zellen ohne energie löschen
+    // Zellen ohne Energie löschen
     let mut cells_died = 0;
     for (entity, energy) in &cell_query {
         if **energy <= 0. {
@@ -564,14 +567,17 @@ pub fn run_on_tick(
     simulation_settings: Res<SimulationSettings>,
     time: Res<Time>,
 ) -> ShouldRun {
+    // Prüfen ob ein Tick aussteht
     if !simulation_settings.is_paused
         && tick_watch.tick(time.delta()).elapsed_secs() >= simulation_settings.tick_delta_seconds
     {
         control_center_ui.actual_tick_delta_seconds_label =
             format!("{:.3}", tick_watch.elapsed_secs());
         tick_watch.reset();
+        // Tick in Auftrag geben
         ShouldRun::Yes
     } else {
+        // Keinen Tick in Auftrag geben
         ShouldRun::No
     }
 }
@@ -730,7 +736,7 @@ pub fn save(
         )
         .unwrap();
 
-        // Simulation settings speichern
+        // Simulation-Settings speichern
         let serialized_simulation_settings = scene::serialize_ron(&*simulation_settings).unwrap();
         fs::write(
             Path::new(&format!(
@@ -756,7 +762,7 @@ pub fn load(
     asset_server: Res<AssetServer>,
 ) {
     for load_event in load_events.iter() {
-        // Alle bestehenden entities despawnen
+        // Alle bestehenden Entities despawnen
         for entity in &entity_query {
             commands.entity(entity).despawn();
         }
@@ -770,7 +776,7 @@ pub fn load(
             ..default()
         });
 
-        // Simulation settings laden
+        // Simulation-Settings laden
         let serialized_simulation_settings = fs::read_to_string(Path::new(&format!(
             "assets/{}/simulation_settings.ron",
             &load_event.save_name

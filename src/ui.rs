@@ -26,16 +26,16 @@ pub struct ControlCenterUi {
     pub child_cooldown_drag_value: u32,
     pub rotation_speed_max_drag_value: f32,
     pub acceleration_max_drag_value: f32,
-    /// Start Energy-Wert für zukünftige manuell gespawnte cells
+    /// Start Energy-Wert für zukünftige manuell gespawnte Zellen
     pub cell_energy_drag_value: f32,
     pub cell_amount_slider: u32,
-    /// Energy-Wert für zukünftiges food
+    /// Energy-Wert für zukünftige Nahrung
     pub food_energy_drag_value: f32,
     pub food_spawn_chance_slider_left: f32,
     pub food_spawn_chance_slider_right: f32,
-    /// Wert zwischen 0 (kein damping) und 1 (100% damping)
+    /// Wert zwischen 0 (kein Damping) und 1 (100% Damping)
     pub velocity_damping_slider_top: f32,
-    /// Wert zwischen 0 (kein damping) und 1 (100% damping)
+    /// Wert zwischen 0 (kein Damping) und 1 (100% Damping)
     pub velocity_damping_slider_bottom: f32,
     pub clear_food_checkbox: bool,
     pub clear_cells_checkbox: bool,
@@ -296,13 +296,13 @@ pub fn display_simulation(
             .view_aspect(1.)
             .legend(default())
             .show(ui, |plot_ui| {
-                // Food daten sammeln
+                // Nahrung Daten sammeln
                 let mut food_points = Vec::new();
                 for position in &food_query {
                     food_points.push([position.x as f64, position.y as f64]);
                 }
 
-                // Food zeichnen
+                // Nahrung zeichnen
                 plot_ui.points(
                     Points::new(PlotPoints::new(food_points))
                         .radius(simulation_settings.food_radius)
@@ -310,7 +310,7 @@ pub fn display_simulation(
                         .name("Food"),
                 );
 
-                // Cell daten sammeln
+                // Zellen Daten sammeln
                 let mut cell_point_groups = vec![
                     Vec::new(),
                     Vec::new(),
@@ -352,7 +352,7 @@ pub fn display_simulation(
                     cell_point_groups[group].push([position.x as f64, position.y as f64]);
                 }
 
-                // Cells zeichnen
+                // Zellen zeichnen
                 for index in 0..cell_point_groups.len() {
                     plot_ui.points(
                         Points::new(PlotPoints::new(cell_point_groups[index].clone()))
@@ -363,7 +363,7 @@ pub fn display_simulation(
                 }
 
                 if plot_ui.plot_clicked() {
-                    // Zelle finden, die am nächsten zu Cursor ist und selecten
+                    // Zelle finden, die am nächsten zu Cursor ist und auswählen
                     let curser_postition = plot_ui.pointer_coordinate().unwrap();
                     let mut nearest_cell_entity = None;
                     let mut nearest_cell_distance_squared = f32::INFINITY;
@@ -432,6 +432,7 @@ pub struct CellCountStatistic;
 pub struct BrainSizeStatistic;
 
 pub fn setup_statistics(mut commands: Commands) {
+    // Child Count Statistik hinzufügen
     commands.spawn(StatisticBundle {
         label: Label("Child Count Statistic".to_string()),
         unique_tag_component: ChildCountStatistic,
@@ -444,6 +445,8 @@ pub fn setup_statistics(mut commands: Commands) {
         },
         ..default()
     });
+
+    // Cell Count Statistik hinzufügen
     commands.spawn(StatisticBundle {
         label: Label("Cell Count Statistic".to_string()),
         unique_tag_component: CellCountStatistic,
@@ -468,6 +471,8 @@ pub fn setup_statistics(mut commands: Commands) {
         },
         ..default()
     });
+
+    // Brain Size Statistik hinzufügen
     commands.spawn(StatisticBundle {
         label: Label("Brain Size Statistic".to_string()),
         unique_tag_component: BrainSizeStatistic,

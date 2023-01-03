@@ -13,6 +13,7 @@ use ui::{
 
 mod brain;
 mod sim;
+mod tests;
 mod ui;
 
 fn main() {
