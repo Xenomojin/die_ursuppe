@@ -29,6 +29,7 @@ pub struct SimulationSettings {
     pub base_energy_drain: f32,
     pub neuron_energy_drain: f32,
     pub connection_energy_drain: f32,
+    pub age_energy_drain: f32,
     pub energy_required_for_split: f32,
     pub rotation_speed_max: f32,
     pub acceleration_max: f32,
@@ -48,6 +49,7 @@ impl Default for SimulationSettings {
             base_energy_drain: 0.4,
             neuron_energy_drain: 0.01,
             connection_energy_drain: 0.004,
+            age_energy_drain: 0.00008,
             energy_required_for_split: 10.,
             rotation_speed_max: 1.,
             acceleration_max: 1.7,
@@ -460,7 +462,8 @@ pub fn tick_cells(
         }
         **energy -= simulation_settings.base_energy_drain
             + neuron_count as f32 * simulation_settings.neuron_energy_drain
-            + connection_count as f32 * simulation_settings.connection_energy_drain;
+            + connection_count as f32 * simulation_settings.connection_energy_drain
+            + stats.age as f32 * simulation_settings.age_energy_drain;
         stats.age += 1;
         if **child_cooldown > 0 {
             **child_cooldown -= 1;
@@ -691,6 +694,7 @@ pub fn apply_simulation_settings(
             base_energy_drain: control_center_ui.base_energy_drain_drag_value,
             neuron_energy_drain: control_center_ui.neuron_energy_drain_drag_value,
             connection_energy_drain: control_center_ui.connection_energy_drain_drag_value,
+            age_energy_drain: control_center_ui.age_energy_drain_drag_value,
             energy_required_for_split: control_center_ui.energy_required_for_split_drag_value,
             child_cooldown: control_center_ui.child_cooldown_drag_value,
             rotation_speed_max: control_center_ui.rotation_speed_max_drag_value,

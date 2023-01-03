@@ -22,6 +22,7 @@ pub struct ControlCenterUi {
     pub base_energy_drain_drag_value: f32,
     pub neuron_energy_drain_drag_value: f32,
     pub connection_energy_drain_drag_value: f32,
+    pub age_energy_drain_drag_value: f32,
     pub energy_required_for_split_drag_value: f32,
     pub child_cooldown_drag_value: u32,
     pub rotation_speed_max_drag_value: f32,
@@ -53,6 +54,7 @@ impl Default for ControlCenterUi {
             base_energy_drain_drag_value: 0.4,
             neuron_energy_drain_drag_value: 0.01,
             connection_energy_drain_drag_value: 0.004,
+            age_energy_drain_drag_value: 0.00008,
             energy_required_for_split_drag_value: 10.,
             child_cooldown_drag_value: 10,
             rotation_speed_max_drag_value: 1.,
@@ -122,6 +124,12 @@ pub fn display_control_center(
                     grid_ui.add(
                         DragValue::new(&mut control_center_ui.connection_energy_drain_drag_value)
                             .speed(0.0001),
+                    );
+                    grid_ui.end_row();
+                    grid_ui.label("Age energy drain: ");
+                    grid_ui.add(
+                        DragValue::new(&mut control_center_ui.age_energy_drain_drag_value)
+                            .speed(0.00001),
                     );
                     grid_ui.end_row();
                     grid_ui.label("Energy required for split: ");
@@ -606,7 +614,7 @@ pub fn display_cell_inspector(
                             pos_y = 0.;
                         }
                         pos_x = local_index as f64 - local_len as f64 / 2. + 0.5;
-                        neuron_positons.push([pos_x, pos_y + (index as f64 * 2.5).sin() * 0.25]);
+                        neuron_positons.push([pos_x + (index as f64 * 2.5).cos() * 0.1, pos_y + (index as f64 * 2.5).sin() * 0.25]);
                     }
 
                     // Connection daten sammeln
