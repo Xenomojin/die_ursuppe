@@ -457,6 +457,7 @@ pub fn tick_cells(
                 rotation: Rotation(**rotation),
                 energy: Energy(new_energy),
                 brain: child_brain,
+                child_cooldown: ChildCooldown(simulation_settings.child_cooldown),
                 ..default()
             });
         }
